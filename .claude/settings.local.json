@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill:*)",
+      "Bash(node:*)",
+      "Bash(./node_modules/.bin/electron:*)",
+      "Bash(npx electron-rebuild:*)",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "WebSearch"
+    ]
+  }
+}

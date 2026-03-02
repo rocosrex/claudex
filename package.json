@@ -1,0 +1,40 @@
+{
+  "name": "claudex",
+  "version": "1.0.0",
+  "description": "Claudex - Claude Code 프로젝트 관리 허브. 할 일, 아이디어, 칸반보드, 터미널 통합",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "NODE_ENV=development electronmon .",
+    "rebuild": "electron-rebuild",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "node-pty": "^1.0.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "electron-rebuild": "^3.2.9",
+    "electronmon": "^2.0.4"
+  },
+  "build": {
+    "appId": "com.rocos.claudex",
+    "productName": "Claudex",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.icns"
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "assets/**/*"
+    ]
+  }
+}
