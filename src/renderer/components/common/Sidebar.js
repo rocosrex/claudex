@@ -74,25 +74,25 @@ export class Sidebar {
           <span>📋</span><span>Kanban Board</span>
         </div>
         <div class="sidebar-nav-item" data-view="terminal">
-          <span>🖥</span><span>Terminal</span>
+          <span>⌘</span><span>Workbench</span>
         </div>
       </nav>
 
-      <div class="px-3 py-2 mt-2">
-        <div class="flex items-center justify-between mb-2">
+      <div class="px-3 py-2 mt-2 flex-1 overflow-hidden flex flex-col" style="min-height:0;">
+        <div class="flex items-center justify-between mb-2 flex-shrink-0">
           <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">Projects</span>
           <span class="sidebar-project-count text-xs text-slate-500"></span>
         </div>
-        <div class="sidebar-projects flex flex-col gap-0.5 overflow-y-auto" style="max-height: calc(100vh - 320px);"></div>
+        <div class="sidebar-projects flex flex-col gap-0.5 overflow-y-auto flex-1" style="min-height:0;"></div>
       </div>
 
-      <div class="mt-auto px-3 py-3 border-t border-slate-700 flex flex-col gap-2">
+      <div class="flex-shrink-0 px-3 py-3 border-t border-slate-700 flex flex-col gap-2">
+        <button class="btn-new-project w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600/20 transition-all text-sm font-medium">
+          <span>+</span><span>New Project</span>
+        </button>
         <button class="btn-toggle-bottom-panel w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-all text-sm font-medium"
                 title="Bottom Terminal (⌘+\`)">
           <span>⌨️</span><span>Bottom Terminal</span>
-        </button>
-        <button class="btn-new-project w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600/20 transition-all text-sm font-medium">
-          <span>+</span><span>New Project</span>
         </button>
         <button class="btn-terminal-settings w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-all text-sm font-medium"
                 title="Terminal Settings">

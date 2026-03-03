@@ -40,6 +40,22 @@ export class Toast {
     return toast;
   }
 
+  static showCenter(message, duration = 2000) {
+    const toast = document.createElement('div');
+    toast.className = 'toast-center';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => toast.classList.add('visible'));
+
+    setTimeout(() => {
+      toast.classList.remove('visible');
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+
+    return toast;
+  }
+
   static dismiss(toast) {
     toast.classList.remove('visible');
     setTimeout(() => {

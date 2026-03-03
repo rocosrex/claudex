@@ -21,7 +21,7 @@ export class MultiTerminalView {
     el.className = 'multi-terminal-view';
     el.innerHTML = `
       <div class="multi-terminal-header">
-        <h2 class="text-lg font-semibold text-slate-100">🖥 Multi Terminal</h2>
+        <h2 class="text-lg font-semibold text-slate-100">⌘ Workbench</h2>
         <div class="flex items-center gap-2">
           <span class="terminal-count text-xs text-slate-500"></span>
           <div class="add-terminal-dropdown">
@@ -454,6 +454,14 @@ export class MultiTerminalView {
 
   // --- Editor Cell ---
   async addEditorCell(filePath, projectId) {
+    // Prevent duplicate editor for same file
+    const existing = this.cells.find(c => c.type === 'editor' && c.filePath === filePath);
+    if (existing) {
+      const fileName = filePath.split('/').pop();
+      Toast.showCenter(`📝 ${fileName} is already open`);
+      return;
+    }
+
     if (this.cells.length >= MAX_TERMINALS) {
       Toast.show(`Maximum ${MAX_TERMINALS} cells allowed`, 'warning');
       return;
@@ -483,7 +491,7 @@ export class MultiTerminalView {
           <button class="docs-toolbar-btn btn-save" style="font-size:0.6875rem;">Save</button>
         </div>
         <textarea class="docs-textarea cell-editor-textarea" placeholder="Loading..." style="font-size:0.75rem;padding:0.5rem;"></textarea>
-        ${isMarkdown ? '<div class="docs-preview markdown-body cell-editor-preview" style="display:none;padding:0.5rem;font-size:0.75rem;overflow-y:auto;"></div>' : ''}
+        ${isMarkdown ? '<div class="docs-preview markdown-body cell-editor-preview" style="display:none;padding:0.5rem;font-size:1rem;overflow-y:auto;"></div>' : ''}
       </div>
     `;
 
@@ -536,7 +544,14 @@ export class MultiTerminalView {
     if (isMarkdown) {
       const previewBtn = cellEl.querySelector('.btn-toggle-preview');
       const preview = cellEl.querySelector('.cell-editor-preview');
-      let showingPreview = false;
+      let showingPreview = true;
+
+      // Default to preview mode
+      preview.innerHTML = window.marked.parse(textarea.value);
+      preview.style.display = '';
+      textarea.style.display = 'none';
+      previewBtn.textContent = 'Edit';
+      previewBtn.classList.add('active');
 
       previewBtn.addEventListener('click', () => {
         showingPreview = !showingPreview;
@@ -585,6 +600,13 @@ export class MultiTerminalView {
 
   // --- PDF Cell ---
   async addPdfCell(filePath) {
+    const existing = this.cells.find(c => c.type === 'pdf' && c.filePath === filePath);
+    if (existing) {
+      const fileName = filePath.split('/').pop();
+      Toast.showCenter(`📕 ${fileName} is already open`);
+      return;
+    }
+
     if (this.cells.length >= MAX_TERMINALS) {
       Toast.show(`Maximum ${MAX_TERMINALS} cells allowed`, 'warning');
       return;
