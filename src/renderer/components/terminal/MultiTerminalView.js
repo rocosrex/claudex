@@ -2,6 +2,7 @@
 import { store } from '../../store/store.js';
 import { Toast } from '../common/Toast.js';
 import { terminalRouter } from '../../utils/terminal-router.js';
+import { getTerminalSettings, buildTerminalOptions } from './terminal-themes.js';
 
 const MAX_TERMINALS = 8;
 
@@ -41,6 +42,7 @@ export class MultiTerminalView {
     this.container = el;
     this.setupDropdown();
     this.setupResizeObserver();
+    this.setupSettingsListener();
 
     return el;
   }
@@ -199,36 +201,10 @@ export class MultiTerminalView {
     `;
 
     // Create xterm instance
+    const settings = getTerminalSettings();
+    const termOptions = buildTerminalOptions(settings);
     const term = new window.Terminal({
-      theme: {
-        background: '#0f172a',
-        foreground: '#e2e8f0',
-        cursor: '#6366f1',
-        cursorAccent: '#0f172a',
-        selectionBackground: '#6366f1',
-        selectionForeground: '#ffffff',
-        black: '#1e293b',
-        red: '#ef4444',
-        green: '#22c55e',
-        yellow: '#eab308',
-        blue: '#3b82f6',
-        magenta: '#a855f7',
-        cyan: '#06b6d4',
-        white: '#f1f5f9',
-        brightBlack: '#475569',
-        brightRed: '#f87171',
-        brightGreen: '#4ade80',
-        brightYellow: '#facc15',
-        brightBlue: '#60a5fa',
-        brightMagenta: '#c084fc',
-        brightCyan: '#22d3ee',
-        brightWhite: '#f8fafc',
-      },
-      fontFamily: '"SF Mono", "Fira Code", "JetBrains Mono", Menlo, monospace',
-      fontSize: 12,
-      lineHeight: 1.3,
-      cursorBlink: true,
-      cursorStyle: 'bar',
+      ...termOptions,
       scrollback: 3000,
       allowProposedApi: true,
     });
@@ -431,8 +407,27 @@ export class MultiTerminalView {
     this.resizeObserver.observe(grid);
   }
 
+  // --- Settings change listener ---
+  setupSettingsListener() {
+    this._onSettingsChanged = () => {
+      const settings = getTerminalSettings();
+      const opts = buildTerminalOptions(settings);
+      this.cells.forEach(cell => {
+        cell.term.options.theme = opts.theme;
+        cell.term.options.fontFamily = opts.fontFamily;
+        cell.term.options.fontSize = opts.fontSize;
+        cell.term.options.lineHeight = opts.lineHeight;
+        cell.term.options.cursorStyle = opts.cursorStyle;
+        cell.term.options.cursorBlink = opts.cursorBlink;
+        try { cell.fitAddon.fit(); } catch (e) { /* ignore */ }
+      });
+    };
+    store.on('terminal-settings-changed', this._onSettingsChanged);
+  }
+
   // --- Cleanup ---
   destroy() {
+    if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
     if (this.resizeObserver) this.resizeObserver.disconnect();
     this.cells.forEach(cell => {
       terminalRouter.unregister(cell.termId);

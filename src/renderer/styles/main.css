@@ -1426,6 +1426,25 @@ select.input {
   overflow: hidden;
 }
 
+/* ===== Terminal Settings Modal ===== */
+.theme-preview-box {
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, monospace;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.custom-color-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.custom-color-swatch {
+  transition: background 0.15s ease;
+}
+
+.custom-color-swatch:hover {
+  transform: scale(1.1);
+}
+
 /* ===== Utility ===== */
 .truncate-2 {
   display: -webkit-box;

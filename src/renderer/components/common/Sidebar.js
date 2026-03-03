@@ -1,5 +1,6 @@
 // Sidebar - Left navigation panel
 import { store } from '../../store/store.js';
+import { TerminalSettingsModal } from '../terminal/TerminalSettingsModal.js';
 
 const TEXT_EXTENSIONS = new Set([
   '.md', '.txt', '.js', '.jsx', '.ts', '.tsx', '.json', '.css', '.scss',
@@ -88,6 +89,10 @@ export class Sidebar {
         <button class="btn-new-project w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600/20 transition-all text-sm font-medium">
           <span>+</span><span>New Project</span>
         </button>
+        <button class="btn-terminal-settings w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-all text-sm font-medium"
+                title="Terminal Settings">
+          <span>⚙️</span><span>Settings</span>
+        </button>
       </div>
     `;
 
@@ -117,6 +122,12 @@ export class Sidebar {
     // Bottom terminal panel toggle
     this.container.querySelector('.btn-toggle-bottom-panel').addEventListener('click', () => {
       store.emit('toggle-bottom-panel');
+    });
+
+    // Terminal settings
+    this.container.querySelector('.btn-terminal-settings').addEventListener('click', () => {
+      const modal = new TerminalSettingsModal();
+      modal.open();
     });
 
     // Search
