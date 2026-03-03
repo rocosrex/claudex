@@ -1,6 +1,6 @@
 {
   "name": "claudex",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Claudex - Claude Code 프로젝트 관리 허브. 할 일, 아이디어, 칸반보드, 터미널 통합",
   "main": "src/main/main.js",
   "scripts": {
