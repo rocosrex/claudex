@@ -4,6 +4,15 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.0] - 2026-03-03
+
+### Added
+- Terminal voice input (STT) with PgDn double-tap toggle
+- VAD (Voice Activity Detection) for hands-free continuous dictation
+- Floating pill indicator showing STT state (listening/recording/transcribing)
+- Mic toggle button in TerminalPanel toolbar
+- Noise filtering: RMS threshold, minimum recording duration, minimum text length
+
 ## [1.8.0] - 2026-03-03
 
 ### Added

@@ -8,6 +8,7 @@ const db = require('./database');
 const terminalManager = require('./terminal-manager');
 const externalTerminal = require('./external-terminal');
 const remoteFileManager = require('./remote-file-manager');
+const sttManager = require('./stt-manager');
 
 let mainWindow = null;
 
@@ -464,6 +465,16 @@ ipcMain.handle('remote:browseDirs', async (_, sshConfig, remotePath) => {
   } catch (e) {
     return { error: e.message };
   }
+});
+
+// --- IPC: STT (Speech-to-Text) ---
+
+ipcMain.handle('stt:checkInstalled', () => {
+  return sttManager.checkWhisperInstalled();
+});
+
+ipcMain.handle('stt:transcribe', async (_, wavBuffer, options) => {
+  return await sttManager.transcribeAudio(wavBuffer, options);
 });
 
 // --- Terminal Callbacks ---

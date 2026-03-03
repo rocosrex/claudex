@@ -6,6 +6,7 @@ import { ProjectDetail } from './components/project/ProjectDetail.js';
 import { ProjectForm } from './components/project/ProjectForm.js';
 import { BottomTerminalPanel } from './components/terminal/BottomTerminalPanel.js';
 import { Toast } from './components/common/Toast.js';
+import { sttService } from './utils/stt-service.js';
 
 class App {
   constructor() {
@@ -120,6 +121,18 @@ class App {
       }
     });
 
+    // PgDn double-tap → STT toggle (fallback for non-xterm contexts)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'PageDown') {
+        const { currentView } = store.getState();
+        if (currentView === 'terminal' || this.bottomPanel?.visible) {
+          if (sttService.handlePgDnKey()) {
+            e.preventDefault();
+          }
+        }
+      }
+    });
+
     // Listen for project form open
     store.on('open-project-form', ({ mode, project }) => {
       const form = new ProjectForm({
@@ -216,6 +229,12 @@ class App {
       this.currentDocsEditor = null;
     }
 
+    // Destroy STT recorder on navigation away
+    if (this.currentSTT) {
+      this.currentSTT.destroy();
+      this.currentSTT = null;
+    }
+
     // Hide cached multi-terminal view (don't destroy)
     if (this.multiTerminalView && this.multiTerminalView.container) {
       this.multiTerminalView.container.style.display = 'none';
@@ -246,6 +265,10 @@ class App {
       }
       case 'terminal': {
         this.loadMultiTerminal();
+        break;
+      }
+      case 'stt': {
+        this.loadSTT();
         break;
       }
       case 'docs-editor': {
@@ -365,6 +388,23 @@ class App {
         <div class="empty-state h-full">
           <div class="empty-state-icon">📕</div>
           <p class="text-slate-400">Failed to load PDF viewer</p>
+          <p class="text-sm text-slate-500 mt-1">${e.message || ''}</p>
+        </div>
+      `;
+    }
+  }
+
+  async loadSTT() {
+    try {
+      const { STTRecorder } = await import('./components/stt/STTRecorder.js');
+      if (this.currentSTT) this.currentSTT.destroy();
+      this.currentSTT = new STTRecorder();
+      this.mainContent.appendChild(this.currentSTT.render());
+    } catch (e) {
+      this.mainContent.innerHTML = `
+        <div class="empty-state h-full">
+          <div class="empty-state-icon">🎙️</div>
+          <p class="text-slate-400">Failed to load STT</p>
           <p class="text-sm text-slate-500 mt-1">${e.message || ''}</p>
         </div>
       `;

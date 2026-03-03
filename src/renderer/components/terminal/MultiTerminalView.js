@@ -3,6 +3,8 @@ import { store } from '../../store/store.js';
 import { Toast } from '../common/Toast.js';
 import { terminalRouter } from '../../utils/terminal-router.js';
 import { getTerminalSettings, buildTerminalOptions } from './terminal-themes.js';
+import { sttService } from '../../utils/stt-service.js';
+import { STTIndicator } from './STTIndicator.js';
 
 const MAX_TERMINALS = 8;
 
@@ -43,6 +45,7 @@ export class MultiTerminalView {
     this.setupDropdown();
     this.setupResizeObserver();
     this.setupSettingsListener();
+    this.setupSTT();
 
     return el;
   }
@@ -233,6 +236,9 @@ export class MultiTerminalView {
     // Custom key handler
     term.attachCustomKeyEventHandler((e) => {
       if (e.metaKey && (e.key === 'c' || e.key === 'v')) return false;
+      if (e.type === 'keydown' && e.key === 'PageDown') {
+        if (sttService.handlePgDnKey()) return false;
+      }
       return true;
     });
 
@@ -571,10 +577,37 @@ export class MultiTerminalView {
     store.on('terminal-settings-changed', this._onSettingsChanged);
   }
 
+  // --- STT Setup ---
+  setupSTT() {
+    // Add STT indicator to grid container
+    this.sttIndicator = new STTIndicator();
+    const grid = this.container.querySelector('.multi-terminal-grid');
+    grid.appendChild(this.sttIndicator.render());
+
+    // State change → update indicator
+    sttService.onStateChange((state) => {
+      this.sttIndicator.update(state);
+    });
+
+    // Transcribed → insert into the last focused terminal cell
+    sttService.onTranscribed((text) => {
+      // Find the last terminal cell that has focus, or the last one
+      const termCells = this.cells.filter(c => c.type === 'terminal');
+      if (termCells.length === 0) return;
+
+      // Use the last active terminal cell
+      const active = termCells[termCells.length - 1];
+      if (active && active.termId) {
+        window.api.terminal.input(active.termId, text);
+      }
+    });
+  }
+
   // --- Cleanup ---
   destroy() {
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
     if (this.resizeObserver) this.resizeObserver.disconnect();
+    if (this.sttIndicator) this.sttIndicator.destroy();
     this.cells.forEach(cell => {
       if (cell.type === 'terminal') {
         terminalRouter.unregister(cell.termId);

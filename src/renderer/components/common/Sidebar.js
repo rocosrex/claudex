@@ -78,6 +78,9 @@ export class Sidebar {
         <div class="sidebar-nav-item" data-view="terminal">
           <span>⌘</span><span>Workbench</span>
         </div>
+        <div class="sidebar-nav-item" data-view="stt">
+          <span>🎙️</span><span>STT (Voice)</span>
+        </div>
       </nav>
 
       <div class="px-3 py-2 mt-2 flex-1 overflow-hidden flex flex-col" style="min-height:0;">

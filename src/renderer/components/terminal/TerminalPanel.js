@@ -2,6 +2,8 @@ import { Toast } from '../common/Toast.js';
 import { terminalRouter } from '../../utils/terminal-router.js';
 import { store } from '../../store/store.js';
 import { getTerminalSettings, buildTerminalOptions } from './terminal-themes.js';
+import { sttService } from '../../utils/stt-service.js';
+import { STTIndicator } from './STTIndicator.js';
 
 export class TerminalPanel {
   /**
@@ -37,6 +39,8 @@ export class TerminalPanel {
                   title="New Terminal">+ Terminal</button>
           <button class="btn-run-claude text-xs px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
                   title="Run Claude Code">▶ Claude</button>
+          <button class="btn-stt-toggle text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                  title="Voice Input (PgDn×2)">🎙 Voice</button>
           <button class="btn-open-external text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
                   title="Open in Terminal.app">🔗 External</button>
         </div>
@@ -58,6 +62,7 @@ export class TerminalPanel {
     this.container = container;
     this.setupEventListeners();
     this.setupSettingsListener();
+    this.setupSTT();
     terminalRouter.init();
 
     // 자동 실행
@@ -149,6 +154,10 @@ export class TerminalPanel {
       // Cmd+C (복사), Cmd+V (붙여넣기)는 브라우저에 위임
       if (e.metaKey && (e.key === 'c' || e.key === 'v')) {
         return false;
+      }
+      // PgDn double-tap → STT toggle
+      if (e.type === 'keydown' && e.key === 'PageDown') {
+        if (sttService.handlePgDnKey()) return false;
       }
       return true;
     });
@@ -387,6 +396,9 @@ export class TerminalPanel {
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.metaKey && (e.key === 'c' || e.key === 'v')) return false;
+      if (e.type === 'keydown' && e.key === 'PageDown') {
+        if (sttService.handlePgDnKey()) return false;
+      }
       return true;
     });
 
@@ -412,6 +424,39 @@ export class TerminalPanel {
     this.fitAddon = fitAddon;
   }
 
+  // --- STT Setup ---
+  setupSTT() {
+    // Add STT indicator to terminal body
+    this.sttIndicator = new STTIndicator();
+    const body = this.container.querySelector('.terminal-body');
+    body.appendChild(this.sttIndicator.render());
+
+    // STT state change → update indicator and button
+    sttService.onStateChange((state) => {
+      this.sttIndicator.update(state);
+      const btn = this.container.querySelector('.btn-stt-toggle');
+      if (btn) {
+        if (state === 'idle') {
+          btn.className = 'btn-stt-toggle text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300';
+        } else {
+          btn.className = 'btn-stt-toggle text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-500 text-white';
+        }
+      }
+    });
+
+    // STT transcribed → insert into active terminal
+    sttService.onTranscribed((text) => {
+      if (this.termId) {
+        window.api.terminal.input(this.termId, text);
+      }
+    });
+
+    // Mic button click
+    this.container.querySelector('.btn-stt-toggle').addEventListener('click', () => {
+      sttService.toggle();
+    });
+  }
+
   // --- Settings change listener ---
   setupSettingsListener() {
     this._onSettingsChanged = () => {
@@ -434,6 +479,7 @@ export class TerminalPanel {
   destroy() {
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
     if (this.resizeObserver) this.resizeObserver.disconnect();
+    if (this.sttIndicator) this.sttIndicator.destroy();
     this.tabs.forEach(tab => {
       terminalRouter.unregister(tab.termId);
       window.api.terminal.close(tab.termId);
