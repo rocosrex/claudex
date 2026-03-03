@@ -4,6 +4,15 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.0] - 2026-03-03
+
+### Added
+- Speaker recognition (voice ID) for STT using sherpa-onnx-node embeddings
+- Speaker enrollment modal with voice sample recording UI
+- Speaker identification displayed in STT indicator pill
+- Speaker management section in terminal settings
+- Background speaker processing via worker thread
+
 ## [1.9.0] - 2026-03-03
 
 ### Added
