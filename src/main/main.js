@@ -9,6 +9,7 @@ const terminalManager = require('./terminal-manager');
 const externalTerminal = require('./external-terminal');
 const remoteFileManager = require('./remote-file-manager');
 const sttManager = require('./stt-manager');
+const speakerManager = require('./speaker-manager');
 
 let mainWindow = null;
 
@@ -475,6 +476,36 @@ ipcMain.handle('stt:checkInstalled', () => {
 
 ipcMain.handle('stt:transcribe', async (_, wavBuffer, options) => {
   return await sttManager.transcribeAudio(wavBuffer, options);
+});
+
+// --- IPC: Speaker Verification ---
+
+ipcMain.handle('speaker:checkModel', () => {
+  return speakerManager.checkModelInstalled();
+});
+
+ipcMain.handle('speaker:isEnrolled', () => {
+  return speakerManager.isEnrolled();
+});
+
+ipcMain.handle('speaker:enroll', (_, wavBuffer) => {
+  try {
+    return speakerManager.enroll(wavBuffer);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('speaker:verify', (_, wavBuffer, threshold) => {
+  try {
+    return speakerManager.verify(wavBuffer, threshold);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('speaker:deleteEnrollment', () => {
+  return speakerManager.deleteEnrollment();
 });
 
 // --- Terminal Callbacks ---

@@ -12,5 +12,8 @@ dist/
 *.p12
 *.pfx
 
+# Large model files
+models/speaker/*.onnx
+
 # Claude Code local settings
 .claude/settings.local.json

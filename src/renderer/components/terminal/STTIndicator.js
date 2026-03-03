@@ -46,6 +46,11 @@ export class STTIndicator {
         icon.textContent = '\u23F3';
         text.textContent = '\uBCC0\uD658 \uC911...';
         break;
+      case 'sv-rejected':
+        this.container.className = 'stt-indicator stt-indicator-rejected';
+        icon.textContent = '\uD83D\uDEAB';
+        text.textContent = '\uB2E4\uB978 \uD654\uC790';
+        break;
     }
   }
 

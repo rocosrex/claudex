@@ -1,6 +1,9 @@
 // TerminalSettingsModal - Theme and font settings for terminal
 import { store } from '../../store/store.js';
 import { THEMES, getTerminalSettings, saveTerminalSettings } from './terminal-themes.js';
+import { sttService } from '../../utils/stt-service.js';
+import { SpeakerEnrollmentModal } from '../stt/SpeakerEnrollmentModal.js';
+import { Toast } from '../common/Toast.js';
 
 export class TerminalSettingsModal {
   constructor() {
@@ -111,6 +114,33 @@ export class TerminalSettingsModal {
             </div>
           </div>
 
+          <!-- Speaker Verification -->
+          <div class="mb-4 mt-4 pt-4" style="border-top:1px solid var(--color-border);">
+            <label class="block text-sm text-slate-400 mb-2">Speaker Verification (화자 인증)</label>
+            <div class="sv-settings-status flex items-center gap-2 mb-3 p-2 rounded" style="background:rgba(30,41,59,0.5);">
+              <span class="sv-model-dot" style="width:8px;height:8px;border-radius:50%;background:#64748b;flex-shrink:0;"></span>
+              <span class="sv-model-text text-xs text-slate-500">확인 중...</span>
+            </div>
+            <div class="flex items-center gap-3 mb-3">
+              <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" class="setting-sv-enabled" ${sttService.speakerVerificationEnabled ? 'checked' : ''} />
+                화자 인증 활성화
+              </label>
+              <button class="sv-enroll-btn text-xs px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white" style="border:none;cursor:pointer;">
+                등록 / 재등록
+              </button>
+              <button class="sv-delete-btn text-xs px-2 py-1 rounded text-red-400 hover:text-red-300" style="border:1px solid rgba(239,68,68,0.3);background:none;cursor:pointer;">
+                삭제
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-slate-500">Threshold</label>
+              <input type="range" class="setting-sv-threshold" min="0.3" max="0.8" step="0.05" value="${sttService.speakerVerificationThreshold}"
+                     style="flex:1;accent-color:var(--color-primary);" />
+              <span class="sv-threshold-value text-xs text-slate-400" style="min-width:32px;text-align:right;">${sttService.speakerVerificationThreshold}</span>
+            </div>
+          </div>
+
           <!-- Preview -->
           <div class="mt-4">
             <label class="block text-sm text-slate-400 mb-1">Preview</label>
@@ -211,12 +241,63 @@ export class TerminalSettingsModal {
       this.updatePreview();
     });
 
+    // --- Speaker Verification ---
+    this._loadSVStatus(ov);
+
+    ov.querySelector('.setting-sv-enabled').addEventListener('change', (e) => {
+      sttService.setSpeakerVerification(e.target.checked);
+      store.emit('sv-state-changed', e.target.checked);
+    });
+
+    ov.querySelector('.setting-sv-threshold').addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      sttService.setSpeakerThreshold(val);
+      ov.querySelector('.sv-threshold-value').textContent = val.toFixed(2);
+    });
+
+    ov.querySelector('.sv-enroll-btn').addEventListener('click', async () => {
+      this.close();
+      const modal = new SpeakerEnrollmentModal();
+      await modal.open();
+    });
+
+    ov.querySelector('.sv-delete-btn').addEventListener('click', async () => {
+      await window.api.speaker.deleteEnrollment();
+      sttService.setSpeakerVerification(false);
+      ov.querySelector('.setting-sv-enabled').checked = false;
+      store.emit('sv-state-changed', false);
+      Toast.show('화자 등록 삭제됨', 'info');
+      this._loadSVStatus(ov);
+    });
+
     // Save
     ov.querySelector('.modal-save-btn').addEventListener('click', () => {
       saveTerminalSettings(this.settings);
       store.emit('terminal-settings-changed', this.settings);
       this.close();
     });
+  }
+
+  async _loadSVStatus(ov) {
+    const dot = ov.querySelector('.sv-model-dot');
+    const text = ov.querySelector('.sv-model-text');
+    try {
+      const model = await window.api.speaker.checkModel();
+      const enrolled = await window.api.speaker.isEnrolled();
+      if (!model.installed) {
+        dot.style.background = '#ef4444';
+        text.textContent = model.sherpaAvailable ? '모델 파일 없음 (models/speaker/)' : 'sherpa-onnx 미설치';
+      } else if (!enrolled.enrolled) {
+        dot.style.background = '#f59e0b';
+        text.textContent = '모델 준비됨 — 화자 미등록';
+      } else {
+        dot.style.background = '#22c55e';
+        text.textContent = `등록됨 (${new Date(enrolled.enrolledAt).toLocaleDateString('ko')})`;
+      }
+    } catch (e) {
+      dot.style.background = '#ef4444';
+      text.textContent = '상태 확인 실패';
+    }
   }
 
   updateColorInputs() {

@@ -90,6 +90,14 @@ contextBridge.exposeInMainWorld('api', {
     transcribe: (wavBuffer, options) => ipcRenderer.invoke('stt:transcribe', wavBuffer, options),
     checkInstalled: () => ipcRenderer.invoke('stt:checkInstalled'),
   },
+  // Speaker Verification
+  speaker: {
+    checkModel: () => ipcRenderer.invoke('speaker:checkModel'),
+    isEnrolled: () => ipcRenderer.invoke('speaker:isEnrolled'),
+    enroll: (wavBuffer) => ipcRenderer.invoke('speaker:enroll', wavBuffer),
+    verify: (wavBuffer, threshold) => ipcRenderer.invoke('speaker:verify', wavBuffer, threshold),
+    deleteEnrollment: () => ipcRenderer.invoke('speaker:deleteEnrollment'),
+  },
   // Stats
   stats: {
     dashboard: () => ipcRenderer.invoke('stats:dashboard'),

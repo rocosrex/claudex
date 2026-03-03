@@ -24,6 +24,10 @@ class STTService {
     this.selectedModel = 'small';
     this.selectedLanguage = 'ko';
 
+    // Speaker verification
+    this.speakerVerificationEnabled = false;
+    this.speakerVerificationThreshold = 0.55;
+
     // PgDn double-tap tracking
     this._lastPgDnTime = 0;
     this._recordingStartTime = 0;
@@ -44,6 +48,14 @@ class STTService {
   _setState(newState) {
     this.state = newState;
     if (this._onStateChange) this._onStateChange(newState);
+  }
+
+  setSpeakerVerification(enabled) {
+    this.speakerVerificationEnabled = enabled;
+  }
+
+  setSpeakerThreshold(threshold) {
+    this.speakerVerificationThreshold = threshold;
   }
 
   /**
@@ -217,9 +229,31 @@ class STTService {
     try {
       const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
       const wavBuffer = await this._convertToWav(blob);
+      const wavArray = Array.from(new Uint8Array(wavBuffer));
+
+      // Speaker verification gate
+      if (this.speakerVerificationEnabled) {
+        try {
+          const svResult = await window.api.speaker.verify(wavArray, this.speakerVerificationThreshold);
+          if (svResult.error) {
+            console.warn('Speaker verification error:', svResult.error);
+          } else if (!svResult.verified) {
+            console.log(`Speaker rejected: score=${svResult.score}, threshold=${svResult.threshold}`);
+            this._setState('sv-rejected');
+            setTimeout(() => {
+              if (this.state === 'sv-rejected' && this.stream) {
+                this._setState('listening');
+              }
+            }, 1500);
+            return;
+          }
+        } catch (e) {
+          console.warn('Speaker verification failed, proceeding:', e);
+        }
+      }
 
       const result = await window.api.stt.transcribe(
-        Array.from(new Uint8Array(wavBuffer)),
+        wavArray,
         { model: this.selectedModel, language: this.selectedLanguage }
       );
 
