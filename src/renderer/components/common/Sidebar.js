@@ -18,6 +18,10 @@ function isTextFile(name) {
   return TEXT_EXTENSIONS.has(lower.slice(dotIdx));
 }
 
+function isPdfFile(name) {
+  return name.toLowerCase().endsWith('.pdf');
+}
+
 function getFileIcon(name) {
   const lower = name.toLowerCase();
   const ext = lower.slice(lower.lastIndexOf('.'));
@@ -30,6 +34,7 @@ function getFileIcon(name) {
     '.h': '⚙️', '.hpp': '⚙️', '.cs': '🟢',
     '.sh': '🔧', '.bash': '🔧', '.zsh': '🔧',
     '.yaml': '⚙️', '.yml': '⚙️', '.toml': '⚙️', '.ini': '⚙️',
+    '.pdf': '📕',
     '.sql': '🗃️', '.graphql': '🔗', '.prisma': '🔗',
     '.svg': '🖼️', '.gitignore': '🚫', '.env': '🔒',
     '.lock': '🔒', '.log': '📃',
@@ -341,16 +346,24 @@ export class Sidebar {
       } else {
         const item = document.createElement('div');
         const isText = isTextFile(f.name);
-        item.className = `sidebar-docs-item sidebar-file-item ${isText ? '' : 'file-disabled'}`;
+        const isPdf = isPdfFile(f.name);
+        const isClickable = isText || isPdf;
+        item.className = `sidebar-docs-item sidebar-file-item ${isClickable ? '' : 'file-disabled'}`;
         item.style.paddingLeft = `${1.5 + depth * 0.75}rem`;
 
-        const icon = isText ? getFileIcon(f.name) : '📎';
+        const icon = isText ? getFileIcon(f.name) : (isPdf ? '📕' : '📎');
         item.innerHTML = `<span class="docs-file-icon">${icon}</span> ${f.name}`;
 
         if (isText) {
           item.addEventListener('click', () => {
             if (this.onNavigate) {
               this.onNavigate('docs-editor', { projectId, filePath: f.absolutePath, projectPath });
+            }
+          });
+        } else if (isPdf) {
+          item.addEventListener('click', () => {
+            if (this.onNavigate) {
+              this.onNavigate('pdf-viewer', { projectId, filePath: f.absolutePath, projectPath });
             }
           });
         } else {

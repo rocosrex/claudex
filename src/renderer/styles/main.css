@@ -908,6 +908,14 @@ select.input {
   min-height: 0;
 }
 
+.cell-content-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* ===== Bottom Terminal Panel ===== */
 .bottom-terminal-panel {
   position: fixed;

@@ -281,6 +281,16 @@ ipcMain.handle('files:read', (_, filePath) => {
   }
 });
 
+ipcMain.handle('files:readBinary', (_, filePath) => {
+  try {
+    const resolved = path.resolve(filePath);
+    const data = fs.readFileSync(resolved);
+    return { data: data.toString('base64') };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
 ipcMain.handle('files:write', (_, filePath, content) => {
   try {
     const resolved = path.resolve(filePath);

@@ -237,7 +237,7 @@ export class MultiTerminalView {
     });
 
     // Store cell data
-    const cellData = { termId, term, fitAddon, cellEl, title };
+    const cellData = { type: 'terminal', termId, term, fitAddon, cellEl, title };
     this.cells.push(cellData);
     const cellIndex = this.cells.length - 1;
 
@@ -282,9 +282,16 @@ export class MultiTerminalView {
     const index = this.cells.indexOf(cellData);
     if (index === -1) return;
 
-    terminalRouter.unregister(cellData.termId);
-    await window.api.terminal.close(cellData.termId);
-    cellData.term.dispose();
+    if (cellData.type === 'terminal') {
+      terminalRouter.unregister(cellData.termId);
+      await window.api.terminal.close(cellData.termId);
+      cellData.term.dispose();
+    } else if (cellData.type === 'editor') {
+      if (cellData.saveTimeout) clearTimeout(cellData.saveTimeout);
+      if (cellData.keyHandler) document.removeEventListener('keydown', cellData.keyHandler);
+    }
+    // pdf: no extra cleanup needed
+
     if (cellData.cellEl.parentNode) cellData.cellEl.remove();
     this.cells.splice(index, 1);
 
@@ -318,6 +325,7 @@ export class MultiTerminalView {
     // Refit all terminals
     requestAnimationFrame(() => {
       this.cells.forEach(cell => {
+        if (cell.type !== 'terminal') return;
         try {
           cell.fitAddon.fit();
           const dims = cell.fitAddon.proposeDimensions();
@@ -393,6 +401,7 @@ export class MultiTerminalView {
   setupResizeObserver() {
     this.resizeObserver = new ResizeObserver(() => {
       this.cells.forEach(cell => {
+        if (cell.type !== 'terminal') return;
         try {
           cell.fitAddon.fit();
           const dims = cell.fitAddon.proposeDimensions();
@@ -413,6 +422,7 @@ export class MultiTerminalView {
       const settings = getTerminalSettings();
       const opts = buildTerminalOptions(settings);
       this.cells.forEach(cell => {
+        if (cell.type !== 'terminal') return;
         cell.term.options.theme = opts.theme;
         cell.term.options.fontFamily = opts.fontFamily;
         cell.term.options.fontSize = opts.fontSize;
@@ -430,10 +440,221 @@ export class MultiTerminalView {
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
     if (this.resizeObserver) this.resizeObserver.disconnect();
     this.cells.forEach(cell => {
-      terminalRouter.unregister(cell.termId);
-      window.api.terminal.close(cell.termId);
-      cell.term.dispose();
+      if (cell.type === 'terminal') {
+        terminalRouter.unregister(cell.termId);
+        window.api.terminal.close(cell.termId);
+        cell.term.dispose();
+      } else if (cell.type === 'editor') {
+        if (cell.saveTimeout) clearTimeout(cell.saveTimeout);
+        if (cell.keyHandler) document.removeEventListener('keydown', cell.keyHandler);
+      }
     });
     this.cells = [];
+  }
+
+  // --- Editor Cell ---
+  async addEditorCell(filePath, projectId) {
+    if (this.cells.length >= MAX_TERMINALS) {
+      Toast.show(`Maximum ${MAX_TERMINALS} cells allowed`, 'warning');
+      return;
+    }
+
+    const fileName = filePath.split('/').pop();
+    const isMarkdown = fileName.toLowerCase().endsWith('.md');
+    const title = `📝 ${fileName}`;
+
+    const grid = this.container.querySelector('.multi-terminal-grid');
+    const emptyState = grid.querySelector('.empty-state');
+    if (emptyState) emptyState.remove();
+
+    const cellEl = document.createElement('div');
+    cellEl.className = 'terminal-cell';
+    cellEl.innerHTML = `
+      <div class="cell-titlebar" draggable="true">
+        <div class="cell-title">
+          <span class="truncate">${title}</span>
+          <span class="cell-modified-badge" style="display:none;color:#eab308;font-size:0.625rem;">Modified</span>
+        </div>
+        <button class="cell-close" title="Close">✕</button>
+      </div>
+      <div class="cell-content-container">
+        <div class="docs-editor-toolbar" style="padding:0.25rem 0.5rem;">
+          ${isMarkdown ? '<button class="docs-toolbar-btn btn-toggle-preview" style="font-size:0.6875rem;">Preview</button>' : ''}
+          <button class="docs-toolbar-btn btn-save" style="font-size:0.6875rem;">Save</button>
+        </div>
+        <textarea class="docs-textarea cell-editor-textarea" placeholder="Loading..." style="font-size:0.75rem;padding:0.5rem;"></textarea>
+        ${isMarkdown ? '<div class="docs-preview markdown-body cell-editor-preview" style="display:none;padding:0.5rem;font-size:0.75rem;overflow-y:auto;"></div>' : ''}
+      </div>
+    `;
+
+    const cellData = { type: 'editor', cellEl, title, filePath, projectId };
+
+    // Load file content
+    try {
+      const result = await window.api.files.read(filePath);
+      if (result.error) throw new Error(result.error);
+      const textarea = cellEl.querySelector('.cell-editor-textarea');
+      textarea.value = result.content;
+      cellData.originalContent = result.content;
+    } catch (e) {
+      const textarea = cellEl.querySelector('.cell-editor-textarea');
+      textarea.value = `Error loading file: ${e.message}`;
+    }
+
+    // Modified badge tracking
+    const textarea = cellEl.querySelector('.cell-editor-textarea');
+    const modBadge = cellEl.querySelector('.cell-modified-badge');
+
+    const checkModified = () => {
+      const isModified = textarea.value !== cellData.originalContent;
+      modBadge.style.display = isModified ? '' : 'none';
+    };
+
+    // Auto-save with debounce
+    textarea.addEventListener('input', () => {
+      checkModified();
+      if (cellData.saveTimeout) clearTimeout(cellData.saveTimeout);
+      cellData.saveTimeout = setTimeout(() => this._saveEditorCell(cellData), 3000);
+    });
+
+    // Save button
+    cellEl.querySelector('.btn-save').addEventListener('click', () => {
+      this._saveEditorCell(cellData);
+    });
+
+    // Cmd+S handler
+    const keyHandler = (e) => {
+      if (e.metaKey && e.key === 's' && document.activeElement === textarea) {
+        e.preventDefault();
+        this._saveEditorCell(cellData);
+      }
+    };
+    document.addEventListener('keydown', keyHandler);
+    cellData.keyHandler = keyHandler;
+
+    // Markdown preview toggle
+    if (isMarkdown) {
+      const previewBtn = cellEl.querySelector('.btn-toggle-preview');
+      const preview = cellEl.querySelector('.cell-editor-preview');
+      let showingPreview = false;
+
+      previewBtn.addEventListener('click', () => {
+        showingPreview = !showingPreview;
+        if (showingPreview) {
+          preview.innerHTML = window.marked.parse(textarea.value);
+          preview.style.display = '';
+          textarea.style.display = 'none';
+          previewBtn.textContent = 'Edit';
+          previewBtn.classList.add('active');
+        } else {
+          preview.style.display = 'none';
+          textarea.style.display = '';
+          previewBtn.textContent = 'Preview';
+          previewBtn.classList.remove('active');
+        }
+      });
+    }
+
+    // Close button
+    cellEl.querySelector('.cell-close').addEventListener('click', () => {
+      this.removeCell(cellData);
+    });
+
+    this.cells.push(cellData);
+    const cellIndex = this.cells.length - 1;
+    this.setupCellDrag(cellEl, cellIndex);
+    grid.appendChild(cellEl);
+    this.updateGridLayout();
+  }
+
+  async _saveEditorCell(cellData) {
+    if (cellData.saveTimeout) clearTimeout(cellData.saveTimeout);
+    const textarea = cellData.cellEl.querySelector('.cell-editor-textarea');
+    if (!textarea) return;
+
+    try {
+      await window.api.files.write(cellData.filePath, textarea.value);
+      cellData.originalContent = textarea.value;
+      const modBadge = cellData.cellEl.querySelector('.cell-modified-badge');
+      if (modBadge) modBadge.style.display = 'none';
+      Toast.show('File saved', 'success', 1500);
+    } catch (e) {
+      Toast.show(`Save failed: ${e.message}`, 'error');
+    }
+  }
+
+  // --- PDF Cell ---
+  async addPdfCell(filePath) {
+    if (this.cells.length >= MAX_TERMINALS) {
+      Toast.show(`Maximum ${MAX_TERMINALS} cells allowed`, 'warning');
+      return;
+    }
+
+    const fileName = filePath.split('/').pop();
+    const title = `📕 ${fileName}`;
+
+    const grid = this.container.querySelector('.multi-terminal-grid');
+    const emptyState = grid.querySelector('.empty-state');
+    if (emptyState) emptyState.remove();
+
+    const cellEl = document.createElement('div');
+    cellEl.className = 'terminal-cell';
+    cellEl.innerHTML = `
+      <div class="cell-titlebar" draggable="true">
+        <div class="cell-title">
+          <span class="truncate">${title}</span>
+          <span class="cell-page-info" style="font-size:0.625rem;color:var(--color-text-secondary);margin-left:auto;"></span>
+        </div>
+        <button class="cell-close" title="Close">✕</button>
+      </div>
+      <div class="cell-content-container" style="overflow-y:auto;align-items:center;padding:4px;gap:4px;">
+        <div style="color:var(--color-text-secondary);font-size:0.75rem;padding:1rem;text-align:center;">Loading PDF...</div>
+      </div>
+    `;
+
+    const cellData = { type: 'pdf', cellEl, title, filePath };
+
+    // Close button
+    cellEl.querySelector('.cell-close').addEventListener('click', () => {
+      this.removeCell(cellData);
+    });
+
+    this.cells.push(cellData);
+    const cellIndex = this.cells.length - 1;
+    this.setupCellDrag(cellEl, cellIndex);
+    grid.appendChild(cellEl);
+    this.updateGridLayout();
+
+    // Load PDF
+    try {
+      const result = await window.api.files.readBinary(filePath);
+      if (result.error) throw new Error(result.error);
+
+      const raw = atob(result.data);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+      const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+      const contentEl = cellEl.querySelector('.cell-content-container');
+      contentEl.innerHTML = '';
+
+      const pageInfo = cellEl.querySelector('.cell-page-info');
+      if (pageInfo) pageInfo.textContent = `${pdf.numPages} pages`;
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.2 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.maxWidth = '100%';
+        canvas.style.borderRadius = '2px';
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        contentEl.appendChild(canvas);
+      }
+    } catch (e) {
+      const contentEl = cellEl.querySelector('.cell-content-container');
+      contentEl.innerHTML = `<div style="color:#f87171;font-size:0.75rem;padding:1rem;">Failed to load PDF: ${e.message}</div>`;
+    }
   }
 }

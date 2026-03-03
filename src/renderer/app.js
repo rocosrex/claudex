@@ -181,6 +181,19 @@ class App {
   }
 
   navigate(view, params = {}) {
+    // Intercept file opens when MultiTerminalView is active
+    if (this.multiTerminalView && this.multiTerminalView.container &&
+        this.multiTerminalView.container.style.display !== 'none') {
+      if (view === 'docs-editor' && params.filePath) {
+        this.multiTerminalView.addEditorCell(params.filePath, params.projectId);
+        return;
+      }
+      if (view === 'pdf-viewer' && params.filePath) {
+        this.multiTerminalView.addPdfCell(params.filePath);
+        return;
+      }
+    }
+
     store.setState({ currentView: view, ...params });
 
     // Destroy docs editor on navigation away
@@ -223,6 +236,10 @@ class App {
       }
       case 'docs-editor': {
         this.loadDocsEditor(params);
+        break;
+      }
+      case 'pdf-viewer': {
+        this.loadPdfViewer(params);
         break;
       }
       default: {
@@ -281,6 +298,57 @@ class App {
         <div class="empty-state h-full">
           <div class="empty-state-icon">📄</div>
           <p class="text-slate-400">Failed to load docs editor</p>
+          <p class="text-sm text-slate-500 mt-1">${e.message || ''}</p>
+        </div>
+      `;
+    }
+  }
+
+  async loadPdfViewer(params) {
+    try {
+      const fileName = params.filePath.split('/').pop();
+      const result = await window.api.files.readBinary(params.filePath);
+      if (result.error) throw new Error(result.error);
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex flex-col h-full overflow-hidden';
+      wrapper.innerHTML = `
+        <div class="docs-editor-toolbar">
+          <span class="docs-editor-filename">📕 ${fileName}</span>
+          <button class="docs-toolbar-btn btn-pdf-close">✕ Close</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 bg-slate-900" style="display:flex;flex-direction:column;align-items:center;gap:8px;"></div>
+      `;
+
+      wrapper.querySelector('.btn-pdf-close').addEventListener('click', () => {
+        if (params.projectId) this.navigate('project-detail', { projectId: params.projectId });
+        else this.navigate('dashboard');
+      });
+
+      this.mainContent.appendChild(wrapper);
+
+      const container = wrapper.querySelector('.flex-1');
+      const raw = atob(result.data);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+      const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.maxWidth = '100%';
+        canvas.style.borderRadius = '4px';
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        container.appendChild(canvas);
+      }
+    } catch (e) {
+      this.mainContent.innerHTML = `
+        <div class="empty-state h-full">
+          <div class="empty-state-icon">📕</div>
+          <p class="text-slate-400">Failed to load PDF viewer</p>
           <p class="text-sm text-slate-500 mt-1">${e.message || ''}</p>
         </div>
       `;
