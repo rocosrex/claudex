@@ -145,9 +145,19 @@ class App {
           }
           break;
         case 'downloaded': {
-          const toast = Toast.show(`✅ v${data.version} ready! Click to restart`, 'success', 0);
+          let countdown = 3;
+          const toast = Toast.show(`✅ v${data.version} ready! Restarting in ${countdown}s...`, 'success', 0);
           toast.style.cursor = 'pointer';
           toast.addEventListener('click', () => window.api.updater.install());
+          const timer = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+              clearInterval(timer);
+              window.api.updater.install();
+            } else {
+              toast.textContent = `✅ v${data.version} ready! Restarting in ${countdown}s...`;
+            }
+          }, 1000);
           break;
         }
       }
