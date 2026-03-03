@@ -14,28 +14,28 @@ export class StatsCards {
         <div class="stats-icon bg-indigo-500/15"><span>📁</span></div>
         <div>
           <div class="text-2xl font-bold text-slate-100 stat-total">-</div>
-          <div class="text-sm text-slate-400">전체 프로젝트</div>
+          <div class="text-sm text-slate-400">Total Projects</div>
         </div>
       </div>
       <div class="stats-card">
         <div class="stats-icon bg-green-500/15"><span>🚀</span></div>
         <div>
           <div class="text-2xl font-bold text-slate-100 stat-active">-</div>
-          <div class="text-sm text-slate-400">활성 프로젝트</div>
+          <div class="text-sm text-slate-400">Active Projects</div>
         </div>
       </div>
       <div class="stats-card">
         <div class="stats-icon bg-orange-500/15"><span>📝</span></div>
         <div>
           <div class="text-2xl font-bold text-slate-100 stat-todos">-</div>
-          <div class="text-sm text-slate-400">미완료 할 일</div>
+          <div class="text-sm text-slate-400">Pending Todos</div>
         </div>
       </div>
       <div class="stats-card">
         <div class="stats-icon bg-cyan-500/15"><span>⏱</span></div>
         <div>
           <div class="text-2xl font-bold text-slate-100 stat-time">-</div>
-          <div class="text-sm text-slate-400">오늘 작업 시간</div>
+          <div class="text-sm text-slate-400">Today's Work</div>
         </div>
       </div>
     `;

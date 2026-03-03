@@ -23,12 +23,12 @@ export function formatDateTime(dateStr) {
 }
 
 export function formatDuration(minutes) {
-  if (minutes == null || minutes < 0) return '0분';
-  if (minutes < 60) return `${minutes}분`;
+  if (minutes == null || minutes < 0) return '0m';
+  if (minutes < 60) return `${minutes}m`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  if (m === 0) return `${h}시간`;
-  return `${h}시간 ${m}분`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 export function formatRelativeTime(dateStr) {
@@ -41,11 +41,11 @@ export function formatRelativeTime(dateStr) {
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 60) return '방금 전';
-  if (diffMin < 60) return `${diffMin}분 전`;
-  if (diffHour < 24) return `${diffHour}시간 전`;
-  if (diffDay === 1) return '어제';
-  if (diffDay < 7) return `${diffDay}일 전`;
+  if (diffSec < 60) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay === 1) return 'Yesterday';
+  if (diffDay < 7) return `${diffDay}d ago`;
   return formatDate(dateStr);
 }
 

@@ -36,7 +36,7 @@ export class ProjectList {
     if (filtered.length === 0) {
       this.container.innerHTML = `
         <div class="empty-state py-4">
-          <p class="text-sm text-slate-500">프로젝트가 없습니다</p>
+          <p class="text-sm text-slate-500">No projects</p>
         </div>
       `;
       return;
@@ -58,7 +58,7 @@ export class ProjectList {
   }
 
   statusLabel(status) {
-    const labels = { active: '활성', paused: '일시정지', completed: '완료', archived: '보관' };
+    const labels = { active: 'Active', paused: 'Paused', completed: 'Completed', archived: 'Archived' };
     return labels[status] || status;
   }
 }

@@ -66,9 +66,9 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../../public/index.html'));
 
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
-  }
+  // if (process.env.NODE_ENV === 'development') {
+  //   mainWindow.webContents.openDevTools();
+  // }
 
   mainWindow.on('close', () => {
     saveWindowState();

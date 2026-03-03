@@ -25,7 +25,7 @@ export class FilePreviewModal {
     // Content area (loading)
     const content = document.createElement('div');
     content.className = 'file-preview-content';
-    content.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--color-text-secondary);">로딩 중...</div>';
+    content.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--color-text-secondary);">Loading...</div>';
 
     // Footer
     const footer = document.createElement('div');
@@ -78,7 +78,7 @@ export class FilePreviewModal {
         content.innerHTML = `
           <div style="padding:2rem;text-align:center;">
             <div style="font-size:2rem;margin-bottom:0.75rem;">📄</div>
-            <p class="text-slate-400 text-sm">미리보기를 지원하지 않는 파일입니다</p>
+            <p class="text-slate-400 text-sm">Preview not available for this file type</p>
             <p class="text-slate-500 text-xs" style="margin-top:0.5rem;">${this.escapeHtml(result.data || '')}</p>
           </div>
         `;
@@ -86,7 +86,7 @@ export class FilePreviewModal {
     } catch (e) {
       content.innerHTML = `
         <div style="padding:2rem;text-align:center;">
-          <p class="text-red-400 text-sm">파일을 읽을 수 없습니다</p>
+          <p class="text-red-400 text-sm">Failed to read file</p>
           <p class="text-slate-500 text-xs" style="margin-top:0.5rem;">${this.escapeHtml(e.message)}</p>
         </div>
       `;

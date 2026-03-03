@@ -13,6 +13,13 @@ const terminals = new Map();
 let onDataCallback = null;
 let onExitCallback = null;
 
+function cleanEnv() {
+  const env = { ...process.env, TERM: 'xterm-256color' };
+  delete env.CLAUDECODE;
+  delete env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+  return env;
+}
+
 function createTerminal(projectId, projectPath) {
   if (!pty) {
     throw new Error('node-pty is not available. Please run: npm rebuild node-pty');
@@ -26,7 +33,7 @@ function createTerminal(projectId, projectPath) {
     cols: 80,
     rows: 24,
     cwd: projectPath || process.env.HOME,
-    env: { ...process.env, TERM: 'xterm-256color' },
+    env: cleanEnv(),
   });
 
   term.onData((data) => {
@@ -96,7 +103,7 @@ function createSSHTerminal(projectId, sshConfig) {
     cols: 80,
     rows: 24,
     cwd: process.env.HOME,
-    env: { ...process.env, TERM: 'xterm-256color' },
+    env: cleanEnv(),
   });
 
   // Auto-type password on any password/passphrase prompt (key passphrase, password auth, sudo, etc.)

@@ -19,7 +19,7 @@ export class DashboardView {
     header.className = 'flex items-center justify-between mb-6';
     header.innerHTML = `
       <div>
-        <h1 class="text-2xl font-bold text-slate-100">대시보드</h1>
+        <h1 class="text-2xl font-bold text-slate-100">Dashboard</h1>
         <p class="text-sm text-slate-400 mt-1">${formatDate(new Date().toISOString())}</p>
       </div>
     `;
@@ -34,7 +34,7 @@ export class DashboardView {
     projectSection.className = 'mb-6';
     projectSection.innerHTML = `
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-slate-200">활성 프로젝트</h2>
+        <h2 class="text-lg font-semibold text-slate-200">Active Projects</h2>
       </div>
       <div class="project-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
     `;
@@ -43,7 +43,7 @@ export class DashboardView {
     // Recent activity section
     const activitySection = document.createElement('div');
     activitySection.innerHTML = `
-      <h2 class="text-lg font-semibold text-slate-200 mb-4">최근 활동</h2>
+      <h2 class="text-lg font-semibold text-slate-200 mb-4">Recent Activity</h2>
       <div class="activity-list card-static p-4"></div>
     `;
     el.appendChild(activitySection);
@@ -75,8 +75,8 @@ export class DashboardView {
       grid.innerHTML = `
         <div class="empty-state col-span-full">
           <div class="empty-state-icon">📁</div>
-          <p class="text-slate-400 mb-2">프로젝트가 없습니다</p>
-          <p class="text-sm text-slate-500">새 프로젝트를 만들어 시작하세요</p>
+          <p class="text-slate-400 mb-2">No projects yet</p>
+          <p class="text-sm text-slate-500">Create a new project to get started</p>
         </div>
       `;
       return;
@@ -99,8 +99,8 @@ export class DashboardView {
         ${p.description ? `<div class="text-sm text-slate-400 mb-3 truncate-2 markdown-body">${window.marked.parse(p.description)}</div>` : ''}
         <div class="mb-2 todo-progress-area" data-project-id="${p.id}">
           <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <span>진행률</span>
-            <span class="todo-ratio-text">로딩...</span>
+            <span>Progress</span>
+            <span class="todo-ratio-text">Loading...</span>
           </div>
           <div class="progress-bar">
             <div class="progress-bar-fill" style="width: 0%"></div>
@@ -125,9 +125,9 @@ export class DashboardView {
         e.stopPropagation();
         if (p.path) {
           window.api.terminal.openExternal(p.path, true);
-          Toast.show(`${p.name}에서 Claude Code를 실행합니다`, 'info');
+          Toast.show(`Launching Claude Code in ${p.name}`, 'info');
         } else {
-          Toast.show('프로젝트 경로가 설정되지 않았습니다', 'warning');
+          Toast.show('Project path is not set', 'warning');
         }
       });
 
@@ -147,10 +147,10 @@ export class DashboardView {
         const total = todos.length;
         const completed = todos.filter(t => t.completed).length;
         const ratio = total > 0 ? Math.round((completed / total) * 100) : 0;
-        area.querySelector('.todo-ratio-text').textContent = `${completed}/${total} 완료`;
+        area.querySelector('.todo-ratio-text').textContent = `${completed}/${total} done`;
         area.querySelector('.progress-bar-fill').style.width = `${ratio}%`;
       } catch (e) {
-        area.querySelector('.todo-ratio-text').textContent = '0/0 완료';
+        area.querySelector('.todo-ratio-text').textContent = '0/0 done';
       }
     }
   }
@@ -171,7 +171,7 @@ export class DashboardView {
     if (!activities || activities.length === 0) {
       list.innerHTML = `
         <div class="empty-state py-6">
-          <p class="text-slate-500 text-sm">활동 기록이 없습니다</p>
+          <p class="text-slate-500 text-sm">No activity yet</p>
         </div>
       `;
       return;
@@ -193,7 +193,7 @@ export class DashboardView {
   }
 
   statusLabel(status) {
-    const labels = { active: '활성', paused: '일시정지', completed: '완료', archived: '보관' };
+    const labels = { active: 'Active', paused: 'Paused', completed: 'Completed', archived: 'Archived' };
     return labels[status] || status;
   }
 }

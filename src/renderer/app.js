@@ -5,6 +5,7 @@ import { DashboardView } from './components/dashboard/DashboardView.js';
 import { ProjectDetail } from './components/project/ProjectDetail.js';
 import { ProjectForm } from './components/project/ProjectForm.js';
 import { BottomTerminalPanel } from './components/terminal/BottomTerminalPanel.js';
+import { Toast } from './components/common/Toast.js';
 
 class App {
   constructor() {
@@ -19,6 +20,7 @@ class App {
   async init() {
     this.renderLayout();
     this.setupRouting();
+    this.setupUpdater();
     await this.loadData();
     this.navigate('dashboard');
   }
@@ -30,7 +32,14 @@ class App {
 
     // Sidebar
     this.sidebar.onNavigate = (view, params) => this.navigate(view, params);
-    layout.appendChild(this.sidebar.render());
+    const sidebarEl = this.sidebar.render();
+    layout.appendChild(sidebarEl);
+
+    // Sidebar resize divider
+    const divider = document.createElement('div');
+    divider.className = 'sidebar-resize-divider';
+    layout.appendChild(divider);
+    this.setupSidebarResize(divider, sidebarEl);
 
     // Main content wrapper (titlebar + content)
     const mainWrapper = document.createElement('div');
@@ -55,6 +64,36 @@ class App {
     // Bottom terminal panel (persistent across navigation)
     this.bottomPanel = new BottomTerminalPanel();
     mainWrapper.appendChild(this.bottomPanel.render());
+  }
+
+  setupSidebarResize(divider, sidebarEl) {
+    let startX, startWidth;
+
+    const onMouseMove = (e) => {
+      const newWidth = Math.max(180, Math.min(480, startWidth + (e.clientX - startX)));
+      sidebarEl.style.width = `${newWidth}px`;
+      sidebarEl.style.minWidth = `${newWidth}px`;
+      document.documentElement.style.setProperty('--sidebar-width', `${newWidth}px`);
+    };
+
+    const onMouseUp = () => {
+      divider.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+
+    divider.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startX = e.clientX;
+      startWidth = sidebarEl.getBoundingClientRect().width;
+      divider.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
   }
 
   setupRouting() {
@@ -89,6 +128,32 @@ class App {
     });
   }
 
+  setupUpdater() {
+    if (!window.api?.updater) return;
+
+    let lastPercent = 0;
+
+    window.api.updater.onStatus((data) => {
+      switch (data.status) {
+        case 'available':
+          Toast.show(`🔄 New version v${data.version} downloading...`, 'info', 5000);
+          break;
+        case 'downloading':
+          if (data.percent - lastPercent >= 25) {
+            lastPercent = data.percent;
+            Toast.show(`⬇️ Downloading update... ${data.percent}%`, 'info', 3000);
+          }
+          break;
+        case 'downloaded': {
+          const toast = Toast.show(`✅ v${data.version} ready! Click to restart`, 'success', 0);
+          toast.style.cursor = 'pointer';
+          toast.addEventListener('click', () => window.api.updater.install());
+          break;
+        }
+      }
+    });
+  }
+
   async loadData() {
     try {
       const projects = await window.api.projects.list();
@@ -100,6 +165,12 @@ class App {
 
   navigate(view, params = {}) {
     store.setState({ currentView: view, ...params });
+
+    // Destroy docs editor on navigation away
+    if (this.currentDocsEditor) {
+      this.currentDocsEditor.destroy();
+      this.currentDocsEditor = null;
+    }
 
     // Hide cached multi-terminal view (don't destroy)
     if (this.multiTerminalView && this.multiTerminalView.container) {
@@ -133,6 +204,10 @@ class App {
         this.loadMultiTerminal();
         break;
       }
+      case 'docs-editor': {
+        this.loadDocsEditor(params);
+        break;
+      }
       default: {
         const dashboard = new DashboardView();
         dashboard.onNavigate = (v, p) => this.navigate(v, p);
@@ -162,6 +237,33 @@ class App {
         <div class="empty-state h-full">
           <div class="empty-state-icon">🖥</div>
           <p class="text-slate-400">Failed to load multi terminal</p>
+          <p class="text-sm text-slate-500 mt-1">${e.message || ''}</p>
+        </div>
+      `;
+    }
+  }
+
+  async loadDocsEditor(params) {
+    // Destroy previous docs editor if exists
+    if (this.currentDocsEditor) {
+      this.currentDocsEditor.destroy();
+      this.currentDocsEditor = null;
+    }
+    try {
+      const { DocsEditorView } = await import('./components/docs/DocsEditorView.js');
+      const editor = new DocsEditorView({
+        projectId: params.projectId,
+        filePath: params.filePath,
+        projectPath: params.projectPath,
+      });
+      editor.onClose = () => this.navigate('project-detail', { projectId: params.projectId });
+      this.currentDocsEditor = editor;
+      this.mainContent.appendChild(editor.render());
+    } catch (e) {
+      this.mainContent.innerHTML = `
+        <div class="empty-state h-full">
+          <div class="empty-state-icon">📄</div>
+          <p class="text-slate-400">Failed to load docs editor</p>
           <p class="text-sm text-slate-500 mt-1">${e.message || ''}</p>
         </div>
       `;

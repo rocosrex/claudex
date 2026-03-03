@@ -224,7 +224,7 @@ export class TodoList {
       chip.className = 'attachment-item';
       chip.innerHTML = `
         <span class="attachment-name" title="${this.escapeHtml(att.file_path)}">📎 ${this.escapeHtml(att.file_name)}</span>
-        <span class="attachment-remove" title="삭제">&times;</span>
+        <span class="attachment-remove" title="Delete">&times;</span>
       `;
 
       chip.querySelector('.attachment-name').addEventListener('click', (e) => {
