@@ -62,8 +62,25 @@ contextBridge.exposeInMainWorld('api', {
     decryptPassword: (base64) => ipcRenderer.invoke('security:decryptPassword', base64),
     selectKeyFile: () => ipcRenderer.invoke('security:selectKeyFile'),
   },
+  // Shell
+  shell: {
+    revealInFinder: (folderPath) => ipcRenderer.invoke('shell:revealInFinder', folderPath),
+  },
+  // Files
+  files: {
+    list: (projectPath) => ipcRenderer.invoke('files:list', projectPath),
+    read: (filePath) => ipcRenderer.invoke('files:read', filePath),
+    write: (filePath, content) => ipcRenderer.invoke('files:write', filePath, content),
+    create: (dirPath, fileName) => ipcRenderer.invoke('files:create', dirPath, fileName),
+  },
   // Stats
   stats: {
     dashboard: () => ipcRenderer.invoke('stats:dashboard'),
+  },
+  // Updater
+  updater: {
+    check: () => ipcRenderer.invoke('updater:check'),
+    install: () => ipcRenderer.invoke('updater:install'),
+    onStatus: (callback) => ipcRenderer.on('updater:status', (_, data) => callback(data)),
   },
 });

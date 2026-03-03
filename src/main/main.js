@@ -1,6 +1,7 @@
 'use strict';
 
 const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const db = require('./database');
@@ -215,6 +216,97 @@ ipcMain.handle('attachments:openInFinder', (_, filePath) => {
   shell.showItemInFolder(filePath);
 });
 
+// --- IPC: Shell ---
+
+ipcMain.handle('shell:revealInFinder', (_, folderPath) => {
+  if (folderPath && fs.existsSync(folderPath)) {
+    shell.openPath(folderPath);
+    return { success: true };
+  }
+  return { error: 'Path does not exist' };
+});
+
+// --- IPC: Files ---
+
+const EXCLUDED_DIRS = new Set([
+  'node_modules', '.git', '.DS_Store', 'dist', 'build', '.next',
+  '__pycache__', '.venv', '.env', '.cache', '.turbo', 'coverage',
+  '.nyc_output', '.idea', '.vscode',
+]);
+
+function walkProjectFiles(dir, baseDir) {
+  const entries = [];
+  let items;
+  try {
+    items = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (e) {
+    return entries;
+  }
+  items.sort((a, b) => {
+    if (a.isDirectory() && !b.isDirectory()) return -1;
+    if (!a.isDirectory() && b.isDirectory()) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  for (const item of items) {
+    if (EXCLUDED_DIRS.has(item.name)) continue;
+    const abs = path.join(dir, item.name);
+    const rel = path.relative(baseDir, abs);
+    if (item.isDirectory()) {
+      const children = walkProjectFiles(abs, baseDir);
+      entries.push({ name: item.name, relativePath: rel, absolutePath: abs, isDirectory: true, children });
+    } else {
+      entries.push({ name: item.name, relativePath: rel, absolutePath: abs, isDirectory: false, children: [] });
+    }
+  }
+  return entries;
+}
+
+function isPathSafe(filePath, projectPath) {
+  const resolved = path.resolve(filePath);
+  const projectRoot = path.resolve(projectPath);
+  return resolved.startsWith(projectRoot);
+}
+
+ipcMain.handle('files:list', (_, projectPath) => {
+  if (!projectPath || !fs.existsSync(projectPath)) return [];
+  return walkProjectFiles(projectPath, projectPath);
+});
+
+ipcMain.handle('files:read', (_, filePath) => {
+  try {
+    const resolved = path.resolve(filePath);
+    return { content: fs.readFileSync(resolved, 'utf-8') };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('files:write', (_, filePath, content) => {
+  try {
+    const resolved = path.resolve(filePath);
+    fs.writeFileSync(resolved, content, 'utf-8');
+    return { success: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('files:create', (_, dirPath, fileName) => {
+  try {
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    const filePath = path.join(dirPath, fileName);
+    if (fs.existsSync(filePath)) {
+      return { error: 'File already exists' };
+    }
+    fs.writeFileSync(filePath, '', 'utf-8');
+    return { success: true, filePath };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
 // --- IPC: Terminal ---
 
 ipcMain.handle('terminal:create', (_, projectId, projectPath) => {
@@ -304,9 +396,60 @@ terminalManager.setExitCallback((termId) => {
 
 // --- App Lifecycle ---
 
+// --- Auto Updater ---
+
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+function setupAutoUpdater() {
+  autoUpdater.on('update-available', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:status', {
+        status: 'available',
+        version: info.version,
+      });
+    }
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:status', {
+        status: 'downloading',
+        percent: Math.round(progress.percent),
+      });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:status', {
+        status: 'downloaded',
+        version: info.version,
+      });
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('Auto-updater error:', err.message);
+  });
+
+  autoUpdater.checkForUpdatesAndNotify();
+}
+
+ipcMain.handle('updater:check', () => {
+  autoUpdater.checkForUpdatesAndNotify();
+});
+
+ipcMain.handle('updater:install', () => {
+  autoUpdater.quitAndInstall();
+});
+
+// --- App Lifecycle ---
+
 app.whenReady().then(() => {
   initDB();
   createWindow();
+  setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

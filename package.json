@@ -8,10 +8,12 @@
     "dev": "NODE_ENV=development electronmon .",
     "rebuild": "electron-rebuild",
     "build": "electron-builder",
-    "build:mac": "electron-builder --mac"
+    "build:mac": "electron-builder --mac",
+    "publish": "electron-builder --mac --publish always"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",
+    "electron-updater": "^6.8.3",
     "node-pty": "^1.0.0",
     "uuid": "^10.0.0"
   },
@@ -24,10 +26,16 @@
   "build": {
     "appId": "com.rocos.claudex",
     "productName": "Claudex",
+    "publish": {
+      "provider": "github",
+      "owner": "rocosrex",
+      "repo": "claudex"
+    },
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "icon": "assets/icon.icns"
     },

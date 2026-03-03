@@ -4,3 +4,13 @@ dist/
 *.db-wal
 *.db-shm
 .DS_Store
+
+# Security
+.env*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Claude Code local settings
+.claude/settings.local.json
