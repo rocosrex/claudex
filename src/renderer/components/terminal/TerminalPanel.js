@@ -16,6 +16,8 @@ export class TerminalPanel {
     this.projectPath = projectPath;
     this.autoRunClaude = options.autoRunClaude || false;
     this.mode = options.mode || 'embedded';
+    this.isSSH = options.isSSH || false;
+    this.project = options.project || null;
     this.termId = null;
     this.terminal = null;  // xterm.js Terminal instance
     this.fitAddon = null;
@@ -256,23 +258,65 @@ export class TerminalPanel {
   // --- 이벤트 ---
   setupEventListeners() {
     this.container.querySelector('.btn-new-terminal').addEventListener('click', () => {
-      this.createTerminalSession(false);
+      if (this.isSSH) {
+        this._createSSHSessionFromProject();
+      } else {
+        this.createTerminalSession(false);
+      }
     });
 
     this.container.querySelector('.btn-run-claude').addEventListener('click', () => {
-      if (this.termId && this.terminal) {
-        // 현재 활성 터미널에서 claude 실행
+      if (this.isSSH) {
+        this._createSSHSessionFromProject(true);
+      } else if (this.termId && this.terminal) {
         window.api.terminal.runClaude(this.termId);
       } else {
-        // 새 터미널 + claude 실행
         this.createAndRunClaude();
       }
     });
 
-    this.container.querySelector('.btn-open-external').addEventListener('click', () => {
-      window.api.terminal.openExternal(this.projectPath, true);
-      Toast.show('Running Claude Code in Terminal.app', 'info');
-    });
+    const btnExternal = this.container.querySelector('.btn-open-external');
+    if (this.isSSH) {
+      btnExternal.style.display = 'none';
+    } else {
+      btnExternal.addEventListener('click', () => {
+        window.api.terminal.openExternal(this.projectPath, true);
+        Toast.show('Running Claude Code in Terminal.app', 'info');
+      });
+    }
+  }
+
+  async _createSSHSessionFromProject(runClaude = false) {
+    const p = this.project;
+    if (!p) return;
+
+    let password = '';
+    if (p.ssh_password_encrypted) {
+      try {
+        password = await window.api.security.decryptPassword(p.ssh_password_encrypted);
+      } catch (e) { /* ignore */ }
+    }
+
+    const sshConfig = {
+      host: p.ssh_host,
+      port: p.ssh_port || 22,
+      username: p.ssh_username,
+      authType: p.ssh_auth_type || 'key',
+      password,
+      keyPath: p.ssh_key_path || '',
+    };
+
+    await this.createSSHSession(this.projectId, sshConfig);
+
+    // Send startup command after connection
+    const startupCmd = runClaude
+      ? (p.ssh_startup_command || '')
+      : '';
+    if (startupCmd) {
+      setTimeout(() => {
+        window.api.terminal.input(this.termId, startupCmd + '\r');
+      }, 500);
+    }
   }
 
   // --- SSH 터미널 ---

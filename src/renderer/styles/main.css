@@ -138,6 +138,19 @@ body {
   color: var(--color-text-primary);
 }
 
+.ssh-badge {
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #22d3ee;
+  background: rgba(34, 211, 238, 0.1);
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
 .project-dot {
   width: 8px;
   height: 8px;
@@ -845,25 +858,44 @@ select.input {
 
 .multi-terminal-grid {
   flex: 1;
-  display: grid;
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
   padding: 4px;
+  gap: 0;
   overflow: hidden;
 }
 
-/* Grid layouts by terminal count */
-.multi-terminal-grid[data-count="1"] { grid-template-columns: 1fr; }
-.multi-terminal-grid[data-count="2"] { grid-template-columns: 1fr 1fr; }
-.multi-terminal-grid[data-count="3"] { grid-template-columns: 1fr 1fr 1fr; }
-.multi-terminal-grid[data-count="4"] { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-.multi-terminal-grid[data-count="5"] { grid-template-columns: repeat(6, 1fr); grid-template-rows: 1fr 1fr; }
-.multi-terminal-grid[data-count="5"] .terminal-cell:nth-child(-n+3) { grid-column: span 2; }
-.multi-terminal-grid[data-count="5"] .terminal-cell:nth-child(n+4) { grid-column: span 3; }
-.multi-terminal-grid[data-count="6"] { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
-.multi-terminal-grid[data-count="7"] { grid-template-columns: repeat(12, 1fr); grid-template-rows: 1fr 1fr; }
-.multi-terminal-grid[data-count="7"] .terminal-cell:nth-child(-n+4) { grid-column: span 3; }
-.multi-terminal-grid[data-count="7"] .terminal-cell:nth-child(n+5) { grid-column: span 4; }
-.multi-terminal-grid[data-count="8"] { grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; }
+.workbench-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.workbench-divider-v {
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+.workbench-divider-v:hover,
+.workbench-divider-v.dragging {
+  background: rgba(99, 102, 241, 0.4);
+}
+
+.workbench-divider-h {
+  height: 5px;
+  cursor: row-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+.workbench-divider-h:hover,
+.workbench-divider-h.dragging {
+  background: rgba(99, 102, 241, 0.4);
+}
 
 .terminal-cell {
   display: flex;
@@ -1275,10 +1307,11 @@ select.input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  font-size: 0.625rem;
-  color: var(--color-text-secondary);
+  width: 18px;
+  height: 18px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text-tertiary, #94a3b8);
   cursor: pointer;
   border-radius: 0.25rem;
   flex-shrink: 0;
@@ -1286,8 +1319,8 @@ select.input {
 }
 
 .docs-toggle:hover {
-  color: var(--color-primary-light);
-  background: rgba(99, 102, 241, 0.1);
+  color: #e2e8f0;
+  background: rgba(99, 102, 241, 0.15);
 }
 
 .docs-toggle.expanded {

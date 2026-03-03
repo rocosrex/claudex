@@ -1,5 +1,7 @@
 // Sidebar - Left navigation panel
 import { store } from '../../store/store.js';
+import { Modal } from '../common/Modal.js';
+import { Toast } from '../common/Toast.js';
 import { TerminalSettingsModal } from '../terminal/TerminalSettingsModal.js';
 
 const TEXT_EXTENSIONS = new Set([
@@ -28,7 +30,7 @@ function getFileIcon(name) {
   const map = {
     '.js': '📜', '.jsx': '📜', '.ts': '📘', '.tsx': '📘',
     '.json': '📋', '.css': '🎨', '.scss': '🎨', '.html': '🌐', '.xml': '🌐',
-    '.md': '📝', '.txt': '📄',
+    '.md': '📄', '.txt': '🗒️',
     '.py': '🐍', '.rb': '💎', '.rs': '🦀', '.go': '🔵',
     '.java': '☕', '.kt': '🟣', '.swift': '🧡', '.c': '⚙️', '.cpp': '⚙️',
     '.h': '⚙️', '.hpp': '⚙️', '.cs': '🟢',
@@ -57,7 +59,7 @@ export class Sidebar {
     el.innerHTML = `
       <div class="titlebar-drag pt-10 px-4 pb-2">
         <div class="flex items-center gap-2 titlebar-no-drag">
-          <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">C</div>
+          <img src="../assets/claudex.svg" alt="Claudex" class="w-8 h-8 rounded-lg" style="object-fit:contain;">
           <h1 class="text-lg font-semibold text-slate-100">Claudex</h1>
         </div>
       </div>
@@ -144,9 +146,8 @@ export class Sidebar {
     document.addEventListener('click', () => this.closeContextMenu());
   }
 
-  showContextMenu(e, folderPath) {
+  showContextMenu(e, folderPath, project) {
     e.preventDefault();
-    if (!folderPath) return;
     this.closeContextMenu();
 
     const menu = document.createElement('div');
@@ -154,15 +155,30 @@ export class Sidebar {
     menu.style.left = `${e.clientX}px`;
     menu.style.top = `${e.clientY}px`;
 
-    const item = document.createElement('div');
-    item.className = 'sidebar-context-menu-item';
-    item.textContent = '📂 Reveal in Finder';
-    item.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      window.api.shell.revealInFinder(folderPath);
-      this.closeContextMenu();
-    });
-    menu.appendChild(item);
+    if (folderPath) {
+      const revealItem = document.createElement('div');
+      revealItem.className = 'sidebar-context-menu-item';
+      revealItem.textContent = '📂 Reveal in Finder';
+      revealItem.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        window.api.shell.revealInFinder(folderPath);
+        this.closeContextMenu();
+      });
+      menu.appendChild(revealItem);
+    }
+
+    if (project) {
+      const deleteItem = document.createElement('div');
+      deleteItem.className = 'sidebar-context-menu-item';
+      deleteItem.style.color = '#f87171';
+      deleteItem.textContent = '🗑 Delete Project';
+      deleteItem.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.closeContextMenu();
+        this.confirmDeleteProject(project);
+      });
+      menu.appendChild(deleteItem);
+    }
 
     document.body.appendChild(menu);
     this.activeContextMenu = menu;
@@ -182,9 +198,37 @@ export class Sidebar {
     }
   }
 
+  confirmDeleteProject(project) {
+    const modal = new Modal({
+      title: '프로젝트 삭제',
+      content: `<p class="text-slate-300">"<strong>${project.name}</strong>" 프로젝트를 삭제하시겠습니까?</p><p class="text-sm text-slate-500 mt-2">할 일, 노트, 타이머 기록이 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</p>`,
+      confirmText: '삭제',
+      onConfirm: async () => {
+        try {
+          await window.api.projects.delete(project.id);
+          this.filesCache.delete(project.id);
+          this.expandedProjects.delete(project.id);
+          const projects = await window.api.projects.list();
+          store.setState({ projects, selectedProjectId: null });
+          modal.close();
+          Toast.show('프로젝트가 삭제되었습니다', 'info');
+          if (this.onNavigate) this.onNavigate('dashboard');
+        } catch (e) {
+          Toast.show('프로젝트 삭제 실패', 'error');
+        }
+      },
+    });
+    modal.open();
+    const confirmBtn = modal.overlay.querySelector('.modal-confirm-btn');
+    if (confirmBtn) {
+      confirmBtn.className = 'text-sm px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all';
+    }
+  }
+
   listenToStore() {
     store.on('change:projects', () => this.renderProjects());
     store.on('change:selectedProjectId', () => this.renderProjects());
+    store.on('change:searchQuery', () => this.renderProjects());
     store.on('change:currentView', (view) => this.setActiveNav(view));
   }
 
@@ -221,11 +265,13 @@ export class Sidebar {
       item.className = `sidebar-project-item ${p.id === selectedProjectId ? 'active' : ''}`;
 
       const isExpanded = this.expandedProjects.has(p.id);
-      const toggleIcon = p.path ? `<span class="docs-toggle ${isExpanded ? 'expanded' : ''}" data-project-id="${p.id}" title="Files">▸</span>` : '';
+      const hasFiles = p.path || p.ssh_host;
+      const toggleIcon = hasFiles ? `<span class="docs-toggle ${isExpanded ? 'expanded' : ''}" data-project-id="${p.id}" title="Files">›</span>` : '';
 
       item.innerHTML = `
         <span class="project-dot" style="background: ${p.color || '#6366f1'}"></span>
         <span class="truncate flex-1">${p.icon || ''} ${p.name}</span>
+        ${p.ssh_host ? '<span class="ssh-badge" title="SSH Remote">SSH</span>' : ''}
         <span class="badge badge-${p.status} text-[10px]">${this.statusLabel(p.status)}</span>
         ${toggleIcon}
       `;
@@ -236,15 +282,18 @@ export class Sidebar {
         if (this.onNavigate) this.onNavigate('project-detail', { projectId: p.id });
       });
 
-      // Right-click → context menu (Reveal in Finder)
-      item.addEventListener('contextmenu', (e) => this.showContextMenu(e, p.path));
+      // Right-click → context menu
+      item.addEventListener('contextmenu', (e) => {
+        const folderPath = (p.path && !p.ssh_host) ? p.path : null;
+        this.showContextMenu(e, folderPath, p);
+      });
 
       // File tree toggle click
       const toggle = item.querySelector('.docs-toggle');
       if (toggle) {
         toggle.addEventListener('click', (e) => {
           e.stopPropagation();
-          this.toggleProjectTree(p.id, p.path, wrapper);
+          this.toggleProjectTree(p.id, p.path, wrapper, p);
         });
       }
 
@@ -252,7 +301,8 @@ export class Sidebar {
 
       // Render expanded file tree if cached
       if (isExpanded && this.filesCache.has(p.id)) {
-        const treeEl = this.renderFileTree(this.filesCache.get(p.id), p.id, p.path);
+        const isRemote = !!p.ssh_host;
+        const treeEl = this.renderFileTree(this.filesCache.get(p.id), p.id, p.path, 0, isRemote);
         wrapper.appendChild(treeEl);
       }
 
@@ -260,7 +310,7 @@ export class Sidebar {
     });
   }
 
-  async toggleProjectTree(projectId, projectPath, wrapper) {
+  async toggleProjectTree(projectId, projectPath, wrapper, project) {
     if (this.expandedProjects.has(projectId)) {
       this.expandedProjects.delete(projectId);
       const tree = wrapper.querySelector('.sidebar-docs-tree');
@@ -274,12 +324,33 @@ export class Sidebar {
     const toggle = wrapper.querySelector('.docs-toggle');
     if (toggle) toggle.classList.add('expanded');
 
+    const isRemote = project && !!project.ssh_host;
+
     if (!this.filesCache.has(projectId)) {
       try {
-        const files = await window.api.files.list(projectPath);
-        this.filesCache.set(projectId, files);
+        if (isRemote) {
+          let remotePath = project.ssh_remote_path || '';
+          if (!remotePath) {
+            const homeDir = await window.api.remote.homeDir(projectId);
+            if (homeDir && !homeDir.error) remotePath = homeDir;
+            else remotePath = '/';
+          }
+          const result = await window.api.remote.listFiles(projectId, remotePath);
+          if (result && result.error) throw new Error(result.error);
+          this.filesCache.set(projectId, Array.isArray(result) ? result : []);
+        } else {
+          const files = await window.api.files.list(projectPath);
+          this.filesCache.set(projectId, files);
+        }
       } catch (e) {
+        console.error('Failed to load file tree:', e);
         this.filesCache.set(projectId, []);
+        // Show error in tree
+        const errEl = document.createElement('div');
+        errEl.className = 'sidebar-docs-tree';
+        errEl.innerHTML = `<div class="sidebar-docs-item empty" style="padding-left:2rem;font-size:0.7rem;color:#f87171;">${isRemote ? 'SSH 연결 실패' : 'Error'}: ${e.message || 'Unknown'}</div>`;
+        wrapper.appendChild(errEl);
+        return;
       }
     }
 
@@ -292,11 +363,11 @@ export class Sidebar {
       return;
     }
 
-    const treeEl = this.renderFileTree(files, projectId, projectPath);
+    const treeEl = this.renderFileTree(files, projectId, projectPath, 0, isRemote);
     wrapper.appendChild(treeEl);
   }
 
-  renderFileTree(files, projectId, projectPath, depth = 0) {
+  renderFileTree(files, projectId, projectPath, depth = 0, remote = false) {
     const tree = document.createElement('div');
     if (depth === 0) tree.className = 'sidebar-docs-tree';
 
@@ -310,7 +381,7 @@ export class Sidebar {
         folderItem.innerHTML = `<span class="folder-toggle ${isFolderExpanded ? 'expanded' : ''}">▸</span><span class="docs-folder-icon">📁</span> <span class="folder-name">${f.name}</span>`;
 
         // Click → toggle folder expand/collapse
-        folderItem.addEventListener('click', (e) => {
+        folderItem.addEventListener('click', async (e) => {
           e.stopPropagation();
           const childrenContainer = folderItem.nextElementSibling;
           const toggleEl = folderItem.querySelector('.folder-toggle');
@@ -322,15 +393,37 @@ export class Sidebar {
             if (toggleEl) toggleEl.classList.remove('expanded');
           } else {
             this.expandedFolders.add(f.absolutePath);
+            if (toggleEl) toggleEl.classList.add('expanded');
+
+            // Remote folders: lazy-load children on first expand
+            if (remote && childrenContainer && childrenContainer.children.length === 0) {
+              childrenContainer.innerHTML = '<div class="text-xs text-slate-500" style="padding-left:2rem;">Loading...</div>';
+              childrenContainer.style.display = '';
+              try {
+                const children = await window.api.remote.listFiles(projectId, f.absolutePath);
+                childrenContainer.innerHTML = '';
+                if (children && !children.error && children.length > 0) {
+                  const childTree = this.renderFileTree(children, projectId, projectPath, depth + 1, remote);
+                  childrenContainer.appendChild(childTree);
+                } else {
+                  childrenContainer.innerHTML = '<div class="text-xs text-slate-500" style="padding-left:2rem;">(empty)</div>';
+                }
+              } catch (err) {
+                childrenContainer.innerHTML = `<div class="text-xs text-red-400" style="padding-left:2rem;">Error: ${err.message}</div>`;
+              }
+              return;
+            }
+
             if (childrenContainer && childrenContainer.classList.contains('sidebar-folder-children')) {
               childrenContainer.style.display = '';
             }
-            if (toggleEl) toggleEl.classList.add('expanded');
           }
         });
 
-        // Right-click → Reveal in Finder
-        folderItem.addEventListener('contextmenu', (e) => this.showContextMenu(e, f.absolutePath));
+        // Right-click → Reveal in Finder (local only)
+        if (!remote) {
+          folderItem.addEventListener('contextmenu', (e) => this.showContextMenu(e, f.absolutePath));
+        }
 
         tree.appendChild(folderItem);
 
@@ -339,7 +432,7 @@ export class Sidebar {
         childrenContainer.className = 'sidebar-folder-children';
         if (!isFolderExpanded) childrenContainer.style.display = 'none';
         if (f.children && f.children.length > 0) {
-          const childTree = this.renderFileTree(f.children, projectId, projectPath, depth + 1);
+          const childTree = this.renderFileTree(f.children, projectId, projectPath, depth + 1, remote);
           childrenContainer.appendChild(childTree);
         }
         tree.appendChild(childrenContainer);
@@ -357,16 +450,16 @@ export class Sidebar {
         if (isText) {
           item.addEventListener('click', () => {
             if (this.onNavigate) {
-              this.onNavigate('docs-editor', { projectId, filePath: f.absolutePath, projectPath });
+              this.onNavigate('docs-editor', { projectId, filePath: f.absolutePath, projectPath, remote });
             }
           });
         } else if (isPdf) {
           item.addEventListener('click', () => {
             if (this.onNavigate) {
-              this.onNavigate('pdf-viewer', { projectId, filePath: f.absolutePath, projectPath });
+              this.onNavigate('pdf-viewer', { projectId, filePath: f.absolutePath, projectPath, remote });
             }
           });
-        } else {
+        } else if (!remote) {
           item.addEventListener('click', () => {
             window.api.shell.revealInFinder(f.absolutePath);
           });

@@ -74,6 +74,17 @@ contextBridge.exposeInMainWorld('api', {
     write: (filePath, content) => ipcRenderer.invoke('files:write', filePath, content),
     create: (dirPath, fileName) => ipcRenderer.invoke('files:create', dirPath, fileName),
   },
+  // Remote Files (SFTP)
+  remote: {
+    listFiles: (projectId, remotePath) => ipcRenderer.invoke('remote:listFiles', projectId, remotePath),
+    readFile: (projectId, remotePath) => ipcRenderer.invoke('remote:readFile', projectId, remotePath),
+    readBinary: (projectId, remotePath) => ipcRenderer.invoke('remote:readBinary', projectId, remotePath),
+    writeFile: (projectId, remotePath, content) => ipcRenderer.invoke('remote:writeFile', projectId, remotePath, content),
+    homeDir: (projectId) => ipcRenderer.invoke('remote:homeDir', projectId),
+    disconnect: (projectId) => ipcRenderer.invoke('remote:disconnect', projectId),
+    testConnection: (sshConfig) => ipcRenderer.invoke('remote:testConnection', sshConfig),
+    browseDirs: (sshConfig, remotePath) => ipcRenderer.invoke('remote:browseDirs', sshConfig, remotePath),
+  },
   // Stats
   stats: {
     dashboard: () => ipcRenderer.invoke('stats:dashboard'),

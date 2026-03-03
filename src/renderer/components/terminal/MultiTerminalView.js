@@ -175,7 +175,7 @@ export class MultiTerminalView {
     }
 
     const startupCommand = project.ssh_startup_command || '';
-    this.createCell(result.termId, title, { autoTmux: true, startupCommand });
+    this.createCell(result.termId, title, { autoTmux: false, startupCommand });
   }
 
   createCell(termId, title, options = {}) {
@@ -263,17 +263,21 @@ export class MultiTerminalView {
         term.focus();
       } catch (e) { /* ignore */ }
 
-      // Auto-start tmux, then startup command
+      // Auto-start tmux (local terminals only), then startup command
       if (options.autoTmux) {
         setTimeout(() => {
           window.api.terminal.input(termId, 'tmux new-session\r');
-          // Send startup command after tmux is ready
           if (options.startupCommand) {
             setTimeout(() => {
               window.api.terminal.input(termId, options.startupCommand + '\r');
             }, 1000);
           }
         }, 300);
+      } else if (options.startupCommand) {
+        // SSH terminals: send startup command directly (no tmux)
+        setTimeout(() => {
+          window.api.terminal.input(termId, options.startupCommand + '\r');
+        }, 500);
       }
     });
   }
@@ -311,16 +315,78 @@ export class MultiTerminalView {
   }
 
   // --- Grid layout ---
+  getRowLayout(count) {
+    switch (count) {
+      case 1: return [1];
+      case 2: return [2];
+      case 3: return [3];
+      case 4: return [2, 2];
+      case 5: return [3, 2];
+      case 6: return [3, 3];
+      case 7: return [4, 3];
+      case 8: return [4, 4];
+      default: return [count];
+    }
+  }
+
   updateGridLayout() {
     const grid = this.container.querySelector('.multi-terminal-grid');
     const count = this.cells.length;
-    grid.setAttribute('data-count', String(count));
 
     // Update counter
     const countEl = this.container.querySelector('.terminal-count');
     if (countEl) {
       countEl.textContent = count > 0 ? `${count}/${MAX_TERMINALS}` : '';
     }
+
+    if (count === 0) return;
+
+    // Detach all cells from DOM (keep references)
+    this.cells.forEach(c => {
+      if (c.cellEl.parentNode) c.cellEl.parentNode.removeChild(c.cellEl);
+    });
+
+    // Remove old rows and dividers
+    grid.querySelectorAll('.workbench-row, .workbench-divider-h').forEach(el => el.remove());
+
+    const rowLayout = this.getRowLayout(count);
+    const rows = [];
+    let cellIndex = 0;
+
+    rowLayout.forEach((cellsInRow) => {
+      const row = document.createElement('div');
+      row.className = 'workbench-row';
+
+      for (let i = 0; i < cellsInRow; i++) {
+        const cell = this.cells[cellIndex];
+        cell.cellEl.style.flex = '1';
+        cell.cellEl.style.minWidth = '0';
+        row.appendChild(cell.cellEl);
+        cellIndex++;
+
+        // Vertical divider between cells in same row
+        if (i < cellsInRow - 1) {
+          const nextCell = this.cells[cellIndex];
+          const divider = document.createElement('div');
+          divider.className = 'workbench-divider-v';
+          this._setupResizeDrag(divider, cell.cellEl, nextCell.cellEl, 'vertical');
+          row.appendChild(divider);
+        }
+      }
+
+      rows.push(row);
+    });
+
+    // Append rows with horizontal dividers between them
+    rows.forEach((row, i) => {
+      grid.appendChild(row);
+      if (i < rows.length - 1) {
+        const divider = document.createElement('div');
+        divider.className = 'workbench-divider-h';
+        this._setupResizeDrag(divider, row, rows[i + 1], 'horizontal');
+        grid.appendChild(divider);
+      }
+    });
 
     // Refit all terminals
     requestAnimationFrame(() => {
@@ -334,6 +400,76 @@ export class MultiTerminalView {
           }
         } catch (e) { /* ignore */ }
       });
+    });
+  }
+
+  _setupResizeDrag(divider, elBefore, elAfter, direction) {
+    let startPos, startBefore, startAfter;
+
+    const onMouseMove = (e) => {
+      const delta = direction === 'vertical'
+        ? e.clientX - startPos
+        : e.clientY - startPos;
+
+      const newBefore = Math.max(80, startBefore + delta);
+      const newAfter = Math.max(80, startAfter - delta);
+
+      elBefore.style.flex = 'none';
+      elAfter.style.flex = 'none';
+
+      if (direction === 'vertical') {
+        elBefore.style.width = `${newBefore}px`;
+        elAfter.style.width = `${newAfter}px`;
+      } else {
+        elBefore.style.height = `${newBefore}px`;
+        elAfter.style.height = `${newAfter}px`;
+      }
+
+      // Refit terminals in affected cells
+      requestAnimationFrame(() => {
+        this.cells.forEach(cell => {
+          if (cell.type !== 'terminal') return;
+          try { cell.fitAddon.fit(); } catch (e) { /* ignore */ }
+        });
+      });
+    };
+
+    const onMouseUp = () => {
+      divider.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+
+      // Final refit with resize notification
+      requestAnimationFrame(() => {
+        this.cells.forEach(cell => {
+          if (cell.type !== 'terminal') return;
+          try {
+            cell.fitAddon.fit();
+            const dims = cell.fitAddon.proposeDimensions();
+            if (dims && dims.cols > 0 && dims.rows > 0) {
+              window.api.terminal.resize(cell.termId, dims.cols, dims.rows);
+            }
+          } catch (e) { /* ignore */ }
+        });
+      });
+    };
+
+    divider.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      divider.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = direction === 'vertical' ? 'col-resize' : 'row-resize';
+
+      startPos = direction === 'vertical' ? e.clientX : e.clientY;
+      const rectBefore = elBefore.getBoundingClientRect();
+      const rectAfter = elAfter.getBoundingClientRect();
+      startBefore = direction === 'vertical' ? rectBefore.width : rectBefore.height;
+      startAfter = direction === 'vertical' ? rectAfter.width : rectAfter.height;
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
     });
   }
 
@@ -453,7 +589,7 @@ export class MultiTerminalView {
   }
 
   // --- Editor Cell ---
-  async addEditorCell(filePath, projectId) {
+  async addEditorCell(filePath, projectId, options = {}) {
     // Prevent duplicate editor for same file
     const existing = this.cells.find(c => c.type === 'editor' && c.filePath === filePath);
     if (existing) {
@@ -469,7 +605,8 @@ export class MultiTerminalView {
 
     const fileName = filePath.split('/').pop();
     const isMarkdown = fileName.toLowerCase().endsWith('.md');
-    const title = `📝 ${fileName}`;
+    const isRemote = !!options.remote;
+    const title = `${isRemote ? '🌐' : '📝'} ${fileName}`;
 
     const grid = this.container.querySelector('.multi-terminal-grid');
     const emptyState = grid.querySelector('.empty-state');
@@ -495,11 +632,13 @@ export class MultiTerminalView {
       </div>
     `;
 
-    const cellData = { type: 'editor', cellEl, title, filePath, projectId };
+    const cellData = { type: 'editor', cellEl, title, filePath, projectId, remote: isRemote };
 
     // Load file content
     try {
-      const result = await window.api.files.read(filePath);
+      const result = isRemote
+        ? await window.api.remote.readFile(projectId, filePath)
+        : await window.api.files.read(filePath);
       if (result.error) throw new Error(result.error);
       const textarea = cellEl.querySelector('.cell-editor-textarea');
       textarea.value = result.content;
@@ -588,7 +727,10 @@ export class MultiTerminalView {
     if (!textarea) return;
 
     try {
-      await window.api.files.write(cellData.filePath, textarea.value);
+      const result = cellData.remote
+        ? await window.api.remote.writeFile(cellData.projectId, cellData.filePath, textarea.value)
+        : await window.api.files.write(cellData.filePath, textarea.value);
+      if (result && result.error) throw new Error(result.error);
       cellData.originalContent = textarea.value;
       const modBadge = cellData.cellEl.querySelector('.cell-modified-badge');
       if (modBadge) modBadge.style.display = 'none';
@@ -599,7 +741,7 @@ export class MultiTerminalView {
   }
 
   // --- PDF Cell ---
-  async addPdfCell(filePath) {
+  async addPdfCell(filePath, projectId, options = {}) {
     const existing = this.cells.find(c => c.type === 'pdf' && c.filePath === filePath);
     if (existing) {
       const fileName = filePath.split('/').pop();
@@ -649,7 +791,10 @@ export class MultiTerminalView {
 
     // Load PDF
     try {
-      const result = await window.api.files.readBinary(filePath);
+      const isRemote = !!options.remote;
+      const result = isRemote
+        ? await window.api.remote.readBinary(projectId, filePath)
+        : await window.api.files.readBinary(filePath);
       if (result.error) throw new Error(result.error);
 
       const raw = atob(result.data);

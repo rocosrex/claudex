@@ -7,6 +7,7 @@ const fs = require('fs');
 const db = require('./database');
 const terminalManager = require('./terminal-manager');
 const externalTerminal = require('./external-terminal');
+const remoteFileManager = require('./remote-file-manager');
 
 let mainWindow = null;
 
@@ -62,6 +63,12 @@ function createWindow() {
 
   if (state.isMaximized) {
     mainWindow.maximize();
+  }
+
+  // Set app icon (for development mode Dock icon)
+  const iconPath = path.join(__dirname, '../../assets/icon.png');
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(iconPath);
   }
 
   mainWindow.loadFile(path.join(__dirname, '../../public/index.html'));
@@ -390,6 +397,75 @@ ipcMain.handle('security:selectKeyFile', async () => {
   return result.filePaths[0];
 });
 
+// --- IPC: Remote Files (SFTP) ---
+
+ipcMain.handle('remote:listFiles', async (_, projectId, remotePath) => {
+  try {
+    return await remoteFileManager.listRemoteFiles(projectId, remotePath);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('remote:readFile', async (_, projectId, remotePath) => {
+  try {
+    return await remoteFileManager.readRemoteFile(projectId, remotePath);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('remote:readBinary', async (_, projectId, remotePath) => {
+  try {
+    return await remoteFileManager.readRemoteBinary(projectId, remotePath);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('remote:writeFile', async (_, projectId, remotePath, content) => {
+  try {
+    return await remoteFileManager.writeRemoteFile(projectId, remotePath, content);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('remote:homeDir', async (_, projectId) => {
+  try {
+    return await remoteFileManager.getHomeDir(projectId);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('remote:disconnect', async (_, projectId) => {
+  try {
+    remoteFileManager.disconnect(projectId);
+    return { success: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+// --- IPC: SSH Test & Browse (direct config, no projectId needed) ---
+
+ipcMain.handle('remote:testConnection', async (_, sshConfig) => {
+  try {
+    return await remoteFileManager.testConnection(sshConfig);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('remote:browseDirs', async (_, sshConfig, remotePath) => {
+  try {
+    return await remoteFileManager.browseRemoteDirs(sshConfig, remotePath);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
 // --- Terminal Callbacks ---
 
 terminalManager.setDataCallback((termId, data) => {
@@ -476,4 +552,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   terminalManager.closeAll();
+  remoteFileManager.disconnectAll();
 });

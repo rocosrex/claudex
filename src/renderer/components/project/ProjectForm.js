@@ -44,11 +44,12 @@ export class ProjectForm {
       </div>
 
       <div>
-        <label class="block text-sm text-slate-400 mb-1">Path</label>
+        <label class="block text-sm text-slate-400 mb-1 path-label">Path</label>
         <div class="flex gap-2">
-          <input type="text" name="path" class="input flex-1" placeholder="/Users/..." value="${p.path || ''}" readonly />
+          <input type="text" name="path" class="input flex-1" placeholder="/Users/..." value="${p.ssh_host ? (p.ssh_remote_path || '') : (p.path || '')}" readonly />
           <button class="btn-select-folder btn-secondary whitespace-nowrap">Browse</button>
         </div>
+        <p class="path-hint text-xs text-slate-500 mt-1" style="display:none;"></p>
       </div>
 
       <div>
@@ -124,6 +125,10 @@ export class ProjectForm {
             <label class="block text-xs text-slate-500 mb-1">Startup Command</label>
             <input type="text" name="ssh_startup_command" class="input text-sm" placeholder="cd /app && ls" value="${p.ssh_startup_command || ''}" />
           </div>
+          <div class="flex gap-2 mt-1">
+            <button type="button" class="btn-test-ssh btn-secondary text-sm flex-1">🔌 Test Connection</button>
+          </div>
+          <div class="ssh-test-result hidden text-xs p-2 rounded-lg mt-1"></div>
         </div>
       </div>
     `;
@@ -177,15 +182,27 @@ export class ProjectForm {
       }
     });
 
-    // Folder select button
-    el.querySelector('.btn-select-folder').addEventListener('click', async () => {
-      try {
-        const result = await window.api.projects.selectFolder();
-        if (result) {
-          el.querySelector('input[name="path"]').value = result;
+    // Folder select button (local or remote depending on SSH state)
+    const pathInput = el.querySelector('input[name="path"]');
+    const pathLabel = el.querySelector('.path-label');
+    const pathHint = el.querySelector('.path-hint');
+    const btnSelectFolder = el.querySelector('.btn-select-folder');
+
+    btnSelectFolder.addEventListener('click', async () => {
+      if (this._sshConnected && this._sshConfig) {
+        // Open remote directory browser
+        const startPath = pathInput.value || this._sshHomeDir || '~';
+        this.openRemoteBrowser(startPath, pathInput);
+      } else {
+        // Local folder picker
+        try {
+          const result = await window.api.projects.selectFolder();
+          if (result) {
+            pathInput.value = result;
+          }
+        } catch (e) {
+          Toast.show('Failed to select folder', 'error');
         }
-      } catch (e) {
-        Toast.show('Failed to select folder', 'error');
       }
     });
 
@@ -225,8 +242,152 @@ export class ProjectForm {
       });
     }
 
+    // SSH Test Connection
+    const btnTestSSH = el.querySelector('.btn-test-ssh');
+    const testResult = el.querySelector('.ssh-test-result');
+
+    const getSSHConfigFromForm = async () => {
+      const host = el.querySelector('input[name="ssh_host"]').value.trim();
+      const port = parseInt(el.querySelector('input[name="ssh_port"]').value) || 22;
+      const username = el.querySelector('input[name="ssh_username"]').value.trim();
+      const activeAuthOpt = el.querySelector('.auth-option.active');
+      const authType = activeAuthOpt ? activeAuthOpt.dataset.auth : 'key';
+      const keyPath = el.querySelector('input[name="ssh_key_path"]').value.trim();
+      const passwordField = el.querySelector('input[name="ssh_password"]').value;
+
+      if (!host || !username) {
+        throw new Error('Host and Username are required');
+      }
+
+      // Decrypt existing password if no new one entered
+      let password = passwordField;
+      if (!password && this.project?.ssh_password_encrypted) {
+        try {
+          password = await window.api.security.decryptPassword(this.project.ssh_password_encrypted);
+        } catch (e) { /* ignore */ }
+      }
+
+      return { host, port, username, authType, keyPath, password };
+    };
+
+    btnTestSSH.addEventListener('click', async () => {
+      testResult.classList.remove('hidden');
+      testResult.style.background = 'rgba(100,116,139,0.2)';
+      testResult.style.color = '#94a3b8';
+      testResult.textContent = '⏳ Connecting...';
+      btnTestSSH.disabled = true;
+
+      try {
+        const sshConfig = await getSSHConfigFromForm();
+        const result = await window.api.remote.testConnection(sshConfig);
+
+        if (result.error) throw new Error(result.error);
+
+        testResult.style.background = 'rgba(34,197,94,0.1)';
+        testResult.style.color = '#4ade80';
+        testResult.textContent = `✅ Connected! Home: ${result.homeDir}`;
+
+        // Store config and switch Path to remote mode
+        this._sshConfig = sshConfig;
+        this._sshHomeDir = result.homeDir;
+        this._sshConnected = true;
+
+        // Update Path field to remote mode
+        pathLabel.textContent = 'Path (Remote)';
+        pathInput.placeholder = result.homeDir;
+        pathHint.textContent = '🌐 SSH connected — Browse selects remote directory';
+        pathHint.style.display = '';
+        pathHint.style.color = '#4ade80';
+
+        // Auto-fill path if empty
+        if (!pathInput.value) {
+          pathInput.value = result.homeDir;
+        }
+      } catch (e) {
+        testResult.style.background = 'rgba(239,68,68,0.1)';
+        testResult.style.color = '#f87171';
+        testResult.textContent = `❌ Failed: ${e.message}`;
+        this._sshConnected = false;
+      } finally {
+        btnTestSSH.disabled = false;
+      }
+    });
+
     this.formEl = el;
     return el;
+  }
+
+  async openRemoteBrowser(startPath, remotePathInput) {
+    const browserEl = document.createElement('div');
+    browserEl.className = 'flex flex-col gap-2';
+
+    const headerEl = document.createElement('div');
+    headerEl.className = 'flex items-center gap-2';
+    headerEl.innerHTML = `
+      <button type="button" class="btn-parent btn-secondary text-sm px-2">⬆</button>
+      <span class="text-sm text-slate-300 flex-1 truncate remote-current-path">${startPath}</span>
+      <button type="button" class="btn-select-this btn-primary text-sm px-3">Select This</button>
+    `;
+
+    const listEl = document.createElement('div');
+    listEl.className = 'flex flex-col gap-0.5 overflow-y-auto';
+    listEl.style.maxHeight = '200px';
+    listEl.innerHTML = '<div class="text-xs text-slate-500 p-2">Loading...</div>';
+
+    browserEl.appendChild(headerEl);
+    browserEl.appendChild(listEl);
+
+    const browserModal = new Modal({
+      title: '📂 Remote Path',
+      content: browserEl,
+      confirmText: 'Cancel',
+      showCancel: false,
+      onConfirm: () => browserModal.close(),
+    });
+    browserModal.open();
+
+    let currentPath = startPath;
+
+    const loadDirs = async (dirPath) => {
+      listEl.innerHTML = '<div class="text-xs text-slate-500 p-2">Loading...</div>';
+      try {
+        const result = await window.api.remote.browseDirs(this._sshConfig, dirPath);
+        if (result.error) throw new Error(result.error);
+
+        currentPath = result.currentPath;
+        browserEl.querySelector('.remote-current-path').textContent = currentPath;
+
+        if (result.dirs.length === 0) {
+          listEl.innerHTML = '<div class="text-xs text-slate-500 p-2">(no subdirectories)</div>';
+          return;
+        }
+
+        listEl.innerHTML = '';
+        for (const dir of result.dirs) {
+          const item = document.createElement('div');
+          item.className = 'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-slate-700 text-sm text-slate-300';
+          item.innerHTML = `<span>📁</span><span class="truncate">${dir.name}</span>`;
+          item.addEventListener('click', () => loadDirs(dir.path));
+          listEl.appendChild(item);
+        }
+      } catch (e) {
+        listEl.innerHTML = `<div class="text-xs text-red-400 p-2">Error: ${e.message}</div>`;
+      }
+    };
+
+    // Parent button
+    headerEl.querySelector('.btn-parent').addEventListener('click', () => {
+      const parent = currentPath.replace(/\/[^/]+\/?$/, '') || '/';
+      loadDirs(parent);
+    });
+
+    // Select this directory
+    headerEl.querySelector('.btn-select-this').addEventListener('click', () => {
+      remotePathInput.value = currentPath;
+      browserModal.close();
+    });
+
+    loadDirs(startPath);
   }
 
   async handleSubmit() {
@@ -263,9 +424,11 @@ export class ProjectForm {
       }
     }
 
+    const pathValue = form.querySelector('input[name="path"]').value.trim();
+
     const data = {
       name,
-      path: form.querySelector('input[name="path"]').value.trim(),
+      path: sshHost ? '' : pathValue, // SSH projects don't use local path
       description: form.querySelector('textarea[name="description"]').value.trim(),
       color: selectedColor ? selectedColor.dataset.color : PRESET_COLORS[0],
       icon: selectedIcon ? selectedIcon.dataset.icon : PRESET_ICONS[0],
@@ -277,6 +440,7 @@ export class ProjectForm {
       ssh_password_encrypted: sshPasswordEncrypted,
       ssh_key_path: sshKeyPath,
       ssh_startup_command: sshStartupCommand,
+      ssh_remote_path: sshHost ? pathValue : '', // SSH projects store path as remote path
     };
 
     try {

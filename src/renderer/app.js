@@ -181,15 +181,29 @@ class App {
   }
 
   navigate(view, params = {}) {
+    // Remote files: always open in Workbench editor cells
+    if (params.remote && (view === 'docs-editor' || view === 'pdf-viewer') && params.filePath) {
+      // Switch to terminal/workbench view, then open cell
+      this.navigate('terminal');
+      requestAnimationFrame(() => {
+        if (view === 'docs-editor') {
+          this.multiTerminalView.addEditorCell(params.filePath, params.projectId, { remote: true });
+        } else {
+          this.multiTerminalView.addPdfCell(params.filePath, params.projectId, { remote: true });
+        }
+      });
+      return;
+    }
+
     // Intercept file opens when MultiTerminalView is active
     if (this.multiTerminalView && this.multiTerminalView.container &&
         this.multiTerminalView.container.style.display !== 'none') {
       if (view === 'docs-editor' && params.filePath) {
-        this.multiTerminalView.addEditorCell(params.filePath, params.projectId);
+        this.multiTerminalView.addEditorCell(params.filePath, params.projectId, { remote: params.remote });
         return;
       }
       if (view === 'pdf-viewer' && params.filePath) {
-        this.multiTerminalView.addPdfCell(params.filePath);
+        this.multiTerminalView.addPdfCell(params.filePath, params.projectId, { remote: params.remote });
         return;
       }
     }
@@ -307,7 +321,9 @@ class App {
   async loadPdfViewer(params) {
     try {
       const fileName = params.filePath.split('/').pop();
-      const result = await window.api.files.readBinary(params.filePath);
+      const result = params.remote
+        ? await window.api.remote.readBinary(params.projectId, params.filePath)
+        : await window.api.files.readBinary(params.filePath);
       if (result.error) throw new Error(result.error);
 
       const wrapper = document.createElement('div');

@@ -26,6 +26,7 @@ function runMigrations() {
     { name: 'ssh_password_encrypted', def: "TEXT DEFAULT ''" },
     { name: 'ssh_key_path', def: "TEXT DEFAULT ''" },
     { name: 'ssh_startup_command', def: "TEXT DEFAULT ''" },
+    { name: 'ssh_remote_path', def: "TEXT DEFAULT ''" },
   ];
 
   const tableInfo = db.prepare("PRAGMA table_info('projects')").all();
@@ -74,7 +75,8 @@ function createTables() {
       ssh_auth_type TEXT DEFAULT 'key',
       ssh_password_encrypted TEXT DEFAULT '',
       ssh_key_path TEXT DEFAULT '',
-      ssh_startup_command TEXT DEFAULT ''
+      ssh_startup_command TEXT DEFAULT '',
+      ssh_remote_path TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS todos (
@@ -132,13 +134,17 @@ function listProjects() {
   return db.prepare('SELECT * FROM projects ORDER BY sort_order ASC, created_at DESC').all();
 }
 
+function getProject(id) {
+  return db.prepare('SELECT * FROM projects WHERE id = ?').get(id) || null;
+}
+
 function createProject(data) {
   const id = uuidv4();
   const now = new Date().toISOString();
   const stmt = db.prepare(`
     INSERT INTO projects (id, name, path, description, color, icon, status, kanban_stage, created_at, updated_at, sort_order,
-      ssh_host, ssh_port, ssh_username, ssh_auth_type, ssh_password_encrypted, ssh_key_path, ssh_startup_command)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ssh_host, ssh_port, ssh_username, ssh_auth_type, ssh_password_encrypted, ssh_key_path, ssh_startup_command, ssh_remote_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     id,
@@ -158,7 +164,8 @@ function createProject(data) {
     data.ssh_auth_type || 'key',
     data.ssh_password_encrypted || '',
     data.ssh_key_path || '',
-    data.ssh_startup_command || ''
+    data.ssh_startup_command || '',
+    data.ssh_remote_path || ''
   );
   addActivity(id, 'project_created', `프로젝트 "${data.name}" 생성`);
   return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
@@ -169,7 +176,7 @@ function updateProject(id, data) {
   if (!existing) return null;
 
   const fields = ['name', 'path', 'description', 'color', 'icon', 'status', 'kanban_stage', 'sort_order',
-    'ssh_host', 'ssh_port', 'ssh_username', 'ssh_auth_type', 'ssh_password_encrypted', 'ssh_key_path', 'ssh_startup_command'];
+    'ssh_host', 'ssh_port', 'ssh_username', 'ssh_auth_type', 'ssh_password_encrypted', 'ssh_key_path', 'ssh_startup_command', 'ssh_remote_path'];
   const updates = [];
   const values = [];
 
@@ -451,6 +458,7 @@ module.exports = {
   initDatabase,
   getDB,
   listProjects,
+  getProject,
   createProject,
   updateProject,
   deleteProject,

@@ -2,6 +2,7 @@
 import { store } from '../../store/store.js';
 import { formatDate, formatRelativeTime } from '../../utils/format.js';
 import { Toast } from '../common/Toast.js';
+import { Modal } from '../common/Modal.js';
 import { ProjectForm } from './ProjectForm.js';
 
 export class ProjectDetail {
@@ -77,6 +78,7 @@ export class ProjectDetail {
           <button class="btn-edit btn-secondary text-sm">Edit</button>
           <button class="btn-terminal btn-secondary text-sm">Terminal</button>
           <button class="btn-claude btn-primary text-sm">▶ Claude Code</button>
+          <button class="btn-delete text-sm px-3 py-1.5 rounded-lg bg-red-600/10 text-red-400 hover:bg-red-600/20 transition-all">Delete</button>
         </div>
       </div>
       ${p.description ? `<div class="markdown-body mb-4 overflow-y-auto pr-2" style="max-height: 480px;">${window.marked.parse(p.description)}</div>` : ''}
@@ -109,6 +111,33 @@ export class ProjectDetail {
         Toast.show('Running Claude Code in Terminal.app', 'info');
       } else {
         Toast.show('Project path is not set', 'warning');
+      }
+    });
+
+    // Delete button
+    header.querySelector('.btn-delete').addEventListener('click', () => {
+      const modal = new Modal({
+        title: '프로젝트 삭제',
+        content: `<p class="text-slate-300">"<strong>${this.project.name}</strong>" 프로젝트를 삭제하시겠습니까?</p><p class="text-sm text-slate-500 mt-2">할 일, 노트, 타이머 기록이 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</p>`,
+        confirmText: '삭제',
+        onConfirm: async () => {
+          try {
+            await window.api.projects.delete(this.project.id);
+            const projects = await window.api.projects.list();
+            store.setState({ projects, selectedProjectId: null });
+            modal.close();
+            Toast.show('프로젝트가 삭제되었습니다', 'info');
+            if (this.onNavigate) this.onNavigate('dashboard');
+          } catch (e) {
+            Toast.show('프로젝트 삭제 실패', 'error');
+          }
+        },
+      });
+      modal.open();
+      // Style confirm button red
+      const confirmBtn = modal.overlay.querySelector('.modal-confirm-btn');
+      if (confirmBtn) {
+        confirmBtn.className = 'text-sm px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all';
       }
     });
   }
@@ -179,7 +208,8 @@ export class ProjectDetail {
   async renderTerminalTab(container) {
     try {
       const { TerminalPanel } = await import('../terminal/TerminalPanel.js');
-      this._terminalPanel = new TerminalPanel(this.projectId, this.project.path);
+      const isSSH = !!this.project.ssh_host;
+      this._terminalPanel = new TerminalPanel(this.projectId, this.project.path, { isSSH, project: this.project });
       this._terminalEl = this._terminalPanel.render();
       container.appendChild(this._terminalEl);
     } catch (e) {
