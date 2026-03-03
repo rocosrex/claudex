@@ -34,22 +34,22 @@ export class STTIndicator {
       case 'listening':
         this.container.className = 'stt-indicator stt-indicator-listening';
         icon.textContent = '\uD83C\uDF99';
-        text.textContent = '\uC74C\uC131 \uB300\uAE30';
+        text.textContent = 'Listening';
         break;
       case 'recording':
         this.container.className = 'stt-indicator stt-indicator-recording';
         icon.textContent = '\uD83D\uDD34';
-        text.textContent = '\uB179\uC74C \uC911';
+        text.textContent = 'Recording';
         break;
       case 'transcribing':
         this.container.className = 'stt-indicator stt-indicator-transcribing';
         icon.textContent = '\u23F3';
-        text.textContent = '\uBCC0\uD658 \uC911...';
+        text.textContent = 'Transcribing...';
         break;
       case 'sv-rejected':
         this.container.className = 'stt-indicator stt-indicator-rejected';
         icon.textContent = '\uD83D\uDEAB';
-        text.textContent = '\uB2E4\uB978 \uD654\uC790';
+        text.textContent = 'Unknown speaker';
         break;
     }
   }

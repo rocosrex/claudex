@@ -1,6 +1,6 @@
 'use strict';
 
-const { execFile, execSync } = require('child_process');
+const { execFile, execSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -165,8 +165,120 @@ function cleanupTempFiles() {
 
 cleanupTempFiles();
 
+function findBrewBinary() {
+  const paths = ['/opt/homebrew/bin/brew', '/usr/local/bin/brew'];
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p;
+  }
+  try {
+    const result = execSync('which brew', { encoding: 'utf-8' }).trim();
+    if (result) return result;
+  } catch (e) { /* not found */ }
+  return null;
+}
+
+function sendProgress(win, step, status, message) {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('stt:installProgress', { step, status, message });
+  }
+}
+
+function installWhisper(win) {
+  return new Promise((resolve, reject) => {
+    const brewPath = findBrewBinary();
+    if (!brewPath) {
+      return reject(new Error('Homebrew가 설치되어 있지 않습니다. https://brew.sh 에서 먼저 설치하세요.'));
+    }
+
+    // Check if already installed
+    if (findWhisperBinary()) {
+      sendProgress(win, 'install', 'done', 'whisper-cpp가 이미 설치되어 있습니다.');
+      return resolve({ success: true, alreadyInstalled: true });
+    }
+
+    sendProgress(win, 'install', 'running', 'brew install whisper-cpp 실행 중...');
+
+    const proc = spawn(brewPath, ['install', 'whisper-cpp'], {
+      env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1' },
+    });
+
+    let output = '';
+    proc.stdout.on('data', (data) => {
+      output += data.toString();
+      sendProgress(win, 'install', 'running', data.toString().trim().slice(-200));
+    });
+    proc.stderr.on('data', (data) => {
+      output += data.toString();
+      sendProgress(win, 'install', 'running', data.toString().trim().slice(-200));
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        sendProgress(win, 'install', 'done', '설치 완료!');
+        resolve({ success: true });
+      } else {
+        sendProgress(win, 'install', 'error', `설치 실패 (exit code ${code})`);
+        reject(new Error(`brew install 실패 (code ${code}):\n${output.slice(-500)}`));
+      }
+    });
+
+    proc.on('error', (err) => {
+      sendProgress(win, 'install', 'error', err.message);
+      reject(err);
+    });
+  });
+}
+
+function downloadModel(modelName = 'small', win) {
+  return new Promise((resolve, reject) => {
+    const binary = findWhisperBinary();
+    if (!binary) {
+      return reject(new Error('whisper-cpp가 먼저 설치되어야 합니다.'));
+    }
+
+    // Check if model already exists
+    if (findModelPath(modelName)) {
+      sendProgress(win, 'model', 'done', `${modelName} 모델이 이미 존재합니다.`);
+      return resolve({ success: true, alreadyExists: true });
+    }
+
+    sendProgress(win, 'model', 'running', `${modelName} 모델 다운로드 중...`);
+
+    const proc = spawn(binary, ['--download-model', modelName], {
+      env: process.env,
+    });
+
+    let output = '';
+    proc.stdout.on('data', (data) => {
+      output += data.toString();
+      sendProgress(win, 'model', 'running', data.toString().trim().slice(-200));
+    });
+    proc.stderr.on('data', (data) => {
+      output += data.toString();
+      sendProgress(win, 'model', 'running', data.toString().trim().slice(-200));
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        sendProgress(win, 'model', 'done', '모델 다운로드 완료!');
+        resolve({ success: true });
+      } else {
+        sendProgress(win, 'model', 'error', `다운로드 실패 (exit code ${code})`);
+        reject(new Error(`모델 다운로드 실패 (code ${code}):\n${output.slice(-500)}`));
+      }
+    });
+
+    proc.on('error', (err) => {
+      sendProgress(win, 'model', 'error', err.message);
+      reject(err);
+    });
+  });
+}
+
 module.exports = {
   checkWhisperInstalled,
   transcribeAudio,
   listAvailableModels,
+  installWhisper,
+  downloadModel,
 };

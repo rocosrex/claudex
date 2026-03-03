@@ -103,6 +103,10 @@ export class Sidebar {
                 title="Terminal Settings">
           <span>⚙️</span><span>Settings</span>
         </button>
+        <button class="btn-open-source-licenses w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-slate-500 hover:text-slate-400 transition-all text-xs"
+                title="Open Source Licenses">
+          <span>📄</span><span>오픈소스 라이선스</span>
+        </button>
       </div>
     `;
 
@@ -138,6 +142,11 @@ export class Sidebar {
     this.container.querySelector('.btn-terminal-settings').addEventListener('click', () => {
       const modal = new TerminalSettingsModal();
       modal.open();
+    });
+
+    // Open source licenses
+    this.container.querySelector('.btn-open-source-licenses').addEventListener('click', () => {
+      this._openLicensesModal();
     });
 
     // Search
@@ -484,5 +493,68 @@ export class Sidebar {
   statusLabel(status) {
     const labels = { active: 'Active', paused: 'Paused', completed: 'Done', archived: 'Archived' };
     return labels[status] || status;
+  }
+
+  _openLicensesModal() {
+    const licenses = [
+      { name: 'Electron', url: 'https://github.com/electron/electron', license: 'MIT' },
+      { name: 'whisper.cpp', url: 'https://github.com/ggml-org/whisper.cpp', license: 'MIT' },
+      { name: 'OpenAI Whisper (모델)', url: 'https://github.com/openai/whisper', license: 'MIT' },
+      { name: 'sherpa-onnx-node', url: 'https://github.com/k2-fsa/sherpa-onnx', license: 'Apache-2.0' },
+      { name: '3D-Speaker / ERes2Net (모델)', url: 'https://github.com/modelscope/3D-Speaker', license: 'Apache-2.0' },
+      { name: 'better-sqlite3', url: 'https://github.com/WiseLibs/better-sqlite3', license: 'MIT' },
+      { name: 'node-pty', url: 'https://github.com/microsoft/node-pty', license: 'MIT' },
+      { name: 'xterm.js', url: 'https://github.com/xtermjs/xterm.js', license: 'MIT' },
+      { name: 'ssh2', url: 'https://github.com/mscdex/ssh2', license: 'MIT' },
+      { name: 'uuid', url: 'https://github.com/uuidjs/uuid', license: 'MIT' },
+      { name: 'electron-updater', url: 'https://github.com/electron-userland/electron-builder', license: 'MIT' },
+    ];
+
+    const rows = licenses.map(l => `
+      <tr class="border-b border-slate-700/50">
+        <td class="py-2 pr-3 text-sm text-slate-200">${l.name}</td>
+        <td class="py-2 pr-3"><span class="text-xs px-2 py-0.5 rounded-full ${l.license === 'MIT' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400'}">${l.license}</span></td>
+        <td class="py-2 text-xs text-slate-500 truncate" style="max-width:200px;">
+          <a href="#" class="license-link hover:text-indigo-400 transition-colors" data-url="${l.url}">${l.url.replace('https://github.com/', '')}</a>
+        </td>
+      </tr>
+    `).join('');
+
+    const content = document.createElement('div');
+    content.innerHTML = `
+      <p class="text-xs text-slate-400 mb-3">이 앱은 아래 오픈소스 소프트웨어를 사용합니다.</p>
+      <div style="max-height:360px;overflow-y:auto;">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-slate-600 text-left">
+              <th class="pb-2 text-xs font-medium text-slate-400">이름</th>
+              <th class="pb-2 text-xs font-medium text-slate-400">라이선스</th>
+              <th class="pb-2 text-xs font-medium text-slate-400">저장소</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">MIT, Apache-2.0 라이선스는 상업적 사용, 수정, 재배포를 허용합니다.</p>
+    `;
+
+    const modal = new Modal({
+      title: '📄 오픈소스 라이선스',
+      content,
+      confirmText: '닫기',
+      showCancel: false,
+      onConfirm: () => modal.close(),
+    });
+    modal.open();
+
+    // Open links in external browser
+    requestAnimationFrame(() => {
+      content.querySelectorAll('.license-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.api.shell.openExternal(link.dataset.url);
+        });
+      });
+    });
   }
 }

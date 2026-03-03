@@ -217,7 +217,8 @@ claudex/
 - Renderer는 <script type="module">로 ES Module 사용
 - 모든 컴포넌트는 class 기반 (render() 메서드로 DOM 생성)
 - 에러 핸들링: try-catch + Toast 알림
-- 한국어 UI 기본, 영어 주석
+- **영어 UI 기본** (모든 사용자 대면 텍스트: 버튼, 라벨, 토스트, 모달, 상태 메시지 등은 영어로 작성)
+- 영어 주석
 
 ---
 

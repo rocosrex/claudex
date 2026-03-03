@@ -1,5 +1,6 @@
 // STT Service - Global singleton for terminal voice input
 // Uses VAD (Voice Activity Detection) for continuous hands-free dictation
+import { STTSetupGuideModal } from '../components/stt/STTSetupGuideModal.js';
 
 class STTService {
   constructor() {
@@ -88,7 +89,10 @@ class STTService {
     try {
       const status = await window.api.stt.checkInstalled();
       if (!status.installed || !status.hasModel) {
-        throw new Error('whisper-cpp not installed or no model found');
+        // Show setup guide modal instead of silently failing
+        const guideModal = new STTSetupGuideModal();
+        guideModal.open();
+        return;
       }
       // Use 'small' if available, otherwise fall back to first available model
       if (status.models.length > 0) {

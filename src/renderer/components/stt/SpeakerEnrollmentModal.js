@@ -27,9 +27,9 @@ export class SpeakerEnrollmentModal {
     content.innerHTML = this._buildContent(status, modelStatus);
 
     this.modal = new Modal({
-      title: '🔐 화자 등록 (Speaker Enrollment)',
+      title: '🔐 Speaker Enrollment',
       content,
-      confirmText: '닫기',
+      confirmText: 'Close',
       showCancel: false,
       onConfirm: () => {
         this._cleanup();
@@ -47,10 +47,10 @@ export class SpeakerEnrollmentModal {
       return `
         <div class="text-center py-4">
           <div class="text-3xl mb-3">⚠️</div>
-          <p class="text-slate-300 mb-2">Speaker 모델이 설치되지 않았습니다</p>
+          <p class="text-slate-300 mb-2">Speaker model is not installed</p>
           <p class="text-xs text-slate-500 mb-3">
-            ${!modelStatus.sherpaAvailable ? 'sherpa-onnx 패키지를 설치하세요: <code>npm install && npm run rebuild</code>' : ''}
-            ${!modelStatus.modelExists ? '모델 파일을 models/speaker/ 에 배치하세요' : ''}
+            ${!modelStatus.sherpaAvailable ? 'Install sherpa-onnx package: <code>npm install && npm run rebuild</code>' : ''}
+            ${!modelStatus.modelExists ? 'Place model file in models/speaker/' : ''}
           </p>
           <p class="text-xs text-slate-600">3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx (~30MB)</p>
         </div>
@@ -63,14 +63,14 @@ export class SpeakerEnrollmentModal {
         <div class="flex items-center gap-2 mb-4 p-3 rounded-lg" style="background:rgba(30,41,59,0.5);">
           <span class="sv-status-dot" style="width:8px;height:8px;border-radius:50%;background:${status.enrolled ? '#22c55e' : '#64748b'};flex-shrink:0;"></span>
           <span class="sv-status-text text-sm text-slate-300">
-            ${status.enrolled ? `등록됨 (${new Date(status.enrolledAt).toLocaleDateString('ko')})` : '미등록 — 아래에서 음성을 등록하세요'}
+            ${status.enrolled ? `Enrolled (${new Date(status.enrolledAt).toLocaleDateString()})` : 'Not enrolled — record your voice below'}
           </span>
-          ${status.enrolled ? '<button class="sv-delete-btn text-xs px-2 py-1 rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 ml-auto">삭제</button>' : ''}
+          ${status.enrolled ? '<button class="sv-delete-btn text-xs px-2 py-1 rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 ml-auto">Delete</button>' : ''}
         </div>
 
         <!-- Recorder -->
         <div class="text-center">
-          <p class="text-xs text-slate-500 mb-3">5~15초 동안 자연스럽게 말해주세요 (아무 내용이나 OK)</p>
+          <p class="text-xs text-slate-500 mb-3">Speak naturally for 5–15 seconds (any content is fine)</p>
           <canvas class="sv-waveform mx-auto mb-3" width="360" height="60" style="border-radius:8px;background:#1e293b;max-width:100%;"></canvas>
 
           <div class="flex items-center justify-center gap-4 mb-3">
@@ -80,7 +80,7 @@ export class SpeakerEnrollmentModal {
             </button>
           </div>
 
-          <div class="sv-record-status text-sm text-slate-500">버튼을 눌러 녹음 시작</div>
+          <div class="sv-record-status text-sm text-slate-500">Press the button to start recording</div>
           <div class="sv-record-timer text-xs text-slate-600 mt-1" style="display:none;">0:00</div>
 
           <!-- Progress bar for min duration -->
@@ -96,7 +96,7 @@ export class SpeakerEnrollmentModal {
         <div class="sv-enrolling text-center mt-4" style="display:none;">
           <div class="flex items-center justify-center gap-2">
             <div class="stt-spinner"></div>
-            <span class="text-sm text-slate-300">Embedding 추출 중...</span>
+            <span class="text-sm text-slate-300">Extracting embedding...</span>
           </div>
         </div>
       </div>
@@ -121,7 +121,7 @@ export class SpeakerEnrollmentModal {
     if (deleteBtn) {
       deleteBtn.addEventListener('click', async () => {
         await window.api.speaker.deleteEnrollment();
-        Toast.show('화자 등록 삭제됨', 'info');
+        Toast.show('Speaker enrollment deleted', 'info');
         this._cleanup();
         this.modal.close();
         // Re-open to refresh
@@ -134,7 +134,7 @@ export class SpeakerEnrollmentModal {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-      Toast.show('마이크 접근이 거부되었습니다', 'error');
+      Toast.show('Microphone access denied', 'error');
       return;
     }
 
@@ -165,7 +165,7 @@ export class SpeakerEnrollmentModal {
     btn.style.borderColor = '#ef4444';
     btn.style.color = '#ef4444';
 
-    content.querySelector('.sv-record-status').textContent = '녹음 중... 5초 이상 말해주세요';
+    content.querySelector('.sv-record-status').textContent = 'Recording... speak for at least 5 seconds';
     const timerEl = content.querySelector('.sv-record-timer');
     timerEl.style.display = '';
 
@@ -180,7 +180,7 @@ export class SpeakerEnrollmentModal {
       const progress = Math.min(100, (secs / this.minDuration) * 100);
       content.querySelector('.sv-progress-fill').style.width = `${progress}%`;
       content.querySelector('.sv-progress-text').textContent =
-        secs < this.minDuration ? `최소 ${this.minDuration - secs}초 더 필요` : '충분합니다. 버튼을 눌러 완료하세요';
+        secs < this.minDuration ? `${this.minDuration - secs}s more needed` : 'Sufficient. Press the button to finish.';
 
       // Auto-stop at max duration
       if (secs >= this.maxDuration) {
@@ -194,7 +194,7 @@ export class SpeakerEnrollmentModal {
 
     const elapsed = (Date.now() - this.recordStart) / 1000;
     if (elapsed < this.minDuration) {
-      Toast.show(`최소 ${this.minDuration}초 이상 녹음해주세요`, 'warning');
+      Toast.show(`Please record for at least ${this.minDuration} seconds`, 'warning');
       return;
     }
 
@@ -221,7 +221,7 @@ export class SpeakerEnrollmentModal {
   async _processEnrollment(content) {
     if (this.audioChunks.length === 0) return;
 
-    content.querySelector('.sv-record-status').textContent = '처리 중...';
+    content.querySelector('.sv-record-status').textContent = 'Processing...';
     const enrollingEl = content.querySelector('.sv-enrolling');
     if (enrollingEl) enrollingEl.style.display = '';
 
@@ -234,16 +234,16 @@ export class SpeakerEnrollmentModal {
       // Enroll
       const result = await window.api.speaker.enroll(wavArray);
       if (result.error) {
-        Toast.show(`등록 실패: ${result.error}`, 'error');
-        content.querySelector('.sv-record-status').textContent = '등록 실패. 다시 시도하세요.';
+        Toast.show(`Enrollment failed: ${result.error}`, 'error');
+        content.querySelector('.sv-record-status').textContent = 'Enrollment failed. Please try again.';
       } else {
-        Toast.show(`화자 등록 완료 (${result.extractionMs}ms)`, 'success');
+        Toast.show(`Speaker enrolled (${result.extractionMs}ms)`, 'success');
         this._cleanup();
         this.modal.close();
       }
     } catch (e) {
-      Toast.show(`등록 실패: ${e.message}`, 'error');
-      content.querySelector('.sv-record-status').textContent = '등록 실패. 다시 시도하세요.';
+      Toast.show(`Enrollment failed: ${e.message}`, 'error');
+      content.querySelector('.sv-record-status').textContent = 'Enrollment failed. Please try again.';
     } finally {
       if (enrollingEl) enrollingEl.style.display = 'none';
     }

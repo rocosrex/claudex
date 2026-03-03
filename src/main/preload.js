@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('api', {
   // Shell
   shell: {
     revealInFinder: (folderPath) => ipcRenderer.invoke('shell:revealInFinder', folderPath),
+    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   },
   // Files
   files: {
@@ -89,6 +90,9 @@ contextBridge.exposeInMainWorld('api', {
   stt: {
     transcribe: (wavBuffer, options) => ipcRenderer.invoke('stt:transcribe', wavBuffer, options),
     checkInstalled: () => ipcRenderer.invoke('stt:checkInstalled'),
+    installWhisper: () => ipcRenderer.invoke('stt:installWhisper'),
+    downloadModel: (modelName) => ipcRenderer.invoke('stt:downloadModel', modelName),
+    onInstallProgress: (callback) => ipcRenderer.on('stt:installProgress', (_, data) => callback(data)),
   },
   // Speaker Verification
   speaker: {

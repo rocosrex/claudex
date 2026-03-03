@@ -235,6 +235,14 @@ ipcMain.handle('shell:revealInFinder', (_, folderPath) => {
   return { error: 'Path does not exist' };
 });
 
+ipcMain.handle('shell:openExternal', (_, url) => {
+  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+    shell.openExternal(url);
+    return { success: true };
+  }
+  return { error: 'Invalid URL' };
+});
+
 // --- IPC: Files ---
 
 const EXCLUDED_DIRS = new Set([
@@ -476,6 +484,14 @@ ipcMain.handle('stt:checkInstalled', () => {
 
 ipcMain.handle('stt:transcribe', async (_, wavBuffer, options) => {
   return await sttManager.transcribeAudio(wavBuffer, options);
+});
+
+ipcMain.handle('stt:installWhisper', () => {
+  return sttManager.installWhisper(mainWindow);
+});
+
+ipcMain.handle('stt:downloadModel', (_, modelName) => {
+  return sttManager.downloadModel(modelName, mainWindow);
 });
 
 // --- IPC: Speaker Verification ---
