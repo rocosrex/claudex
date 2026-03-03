@@ -33,6 +33,12 @@ class App {
     // Sidebar
     this.sidebar.onNavigate = (view, params) => this.navigate(view, params);
     const sidebarEl = this.sidebar.render();
+    const savedWidth = localStorage.getItem('sidebar-width');
+    if (savedWidth) {
+      sidebarEl.style.width = `${savedWidth}px`;
+      sidebarEl.style.minWidth = `${savedWidth}px`;
+      document.documentElement.style.setProperty('--sidebar-width', `${savedWidth}px`);
+    }
     layout.appendChild(sidebarEl);
 
     // Sidebar resize divider
@@ -82,6 +88,7 @@ class App {
       document.removeEventListener('mouseup', onMouseUp);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
+      localStorage.setItem('sidebar-width', sidebarEl.getBoundingClientRect().width);
     };
 
     divider.addEventListener('mousedown', (e) => {
