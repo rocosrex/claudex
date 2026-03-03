@@ -85,6 +85,11 @@ contextBridge.exposeInMainWorld('api', {
     testConnection: (sshConfig) => ipcRenderer.invoke('remote:testConnection', sshConfig),
     browseDirs: (sshConfig, remotePath) => ipcRenderer.invoke('remote:browseDirs', sshConfig, remotePath),
   },
+  // STT (Speech-to-Text)
+  stt: {
+    transcribe: (wavBuffer, options) => ipcRenderer.invoke('stt:transcribe', wavBuffer, options),
+    checkInstalled: () => ipcRenderer.invoke('stt:checkInstalled'),
+  },
   // Stats
   stats: {
     dashboard: () => ipcRenderer.invoke('stats:dashboard'),

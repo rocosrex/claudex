@@ -9,7 +9,7 @@
     "rebuild": "electron-rebuild",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
-    "publish": "electron-builder --mac --publish always"
+    "publish": "GH_TOKEN=$(gh auth token) electron-builder --mac --publish always"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",
