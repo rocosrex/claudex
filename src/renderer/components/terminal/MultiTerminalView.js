@@ -26,6 +26,8 @@ export class MultiTerminalView {
         <h2 class="text-lg font-semibold text-slate-100">⌘ Workbench</h2>
         <div class="flex items-center gap-2">
           <span class="terminal-count text-xs text-slate-500"></span>
+          <button class="btn-stt-toggle text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                  title="Voice Input (PgDn×2)">🎙 Voice</button>
           <div class="add-terminal-dropdown">
             <button class="btn-add-terminal btn-primary text-sm px-3 py-1.5">+ Add Terminal</button>
             <div class="add-terminal-menu" style="display:none;"></div>
@@ -584,9 +586,22 @@ export class MultiTerminalView {
     const grid = this.container.querySelector('.multi-terminal-grid');
     grid.appendChild(this.sttIndicator.render());
 
-    // State change → update indicator
+    // State change → update indicator and button
     sttService.onStateChange((state) => {
       this.sttIndicator.update(state);
+      const btn = this.container.querySelector('.btn-stt-toggle');
+      if (btn) {
+        if (state === 'idle') {
+          btn.className = 'btn-stt-toggle text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300';
+        } else {
+          btn.className = 'btn-stt-toggle text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-500 text-white';
+        }
+      }
+    });
+
+    // Mic button click
+    this.container.querySelector('.btn-stt-toggle').addEventListener('click', () => {
+      sttService.toggle();
     });
 
     // Transcribed → insert into the last focused terminal cell
