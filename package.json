@@ -31,7 +31,8 @@
     "publish": {
       "provider": "github",
       "owner": "rocosrex",
-      "repo": "claudex"
+      "repo": "claudex",
+      "releaseType": "release"
     },
     "mac": {
       "category": "public.app-category.developer-tools",
