@@ -10,8 +10,8 @@ export class TerminalPanel {
    * @param {string} projectId
    * @param {string} projectPath
    * @param {Object} options
-   * @param {boolean} options.autoRunClaude - 생성 시 자동으로 claude 실행
-   * @param {string} options.mode - 'embedded' (앱 내) | 'panel' (하단 슬라이드)
+   * @param {boolean} options.autoRunClaude - Auto-run Claude on creation
+   * @param {string} options.mode - 'embedded' (in-app) | 'panel' (bottom slide)
    */
   constructor(projectId, projectPath, options = {}) {
     this.projectId = projectId;
@@ -23,7 +23,7 @@ export class TerminalPanel {
     this.termId = null;
     this.terminal = null;  // xterm.js Terminal instance
     this.fitAddon = null;
-    this.tabs = [];        // 여러 터미널 세션 관리
+    this.tabs = [];        // Manage multiple terminal sessions
     this.activeTabIndex = 0;
   }
 
@@ -31,7 +31,7 @@ export class TerminalPanel {
     const container = document.createElement('div');
     container.className = 'terminal-panel flex flex-col h-full';
     container.innerHTML = `
-      <!-- 터미널 탭 바 -->
+      <!-- Terminal tab bar -->
       <div class="terminal-tabs flex items-center gap-1 px-2 py-1 bg-slate-900 border-b border-slate-700">
         <div class="tabs-list flex gap-1 flex-1 overflow-x-auto"></div>
         <div class="tab-actions flex gap-1">
@@ -45,10 +45,10 @@ export class TerminalPanel {
                   title="Open in Terminal.app">🔗 External</button>
         </div>
       </div>
-      <!-- 터미널 본체 -->
+      <!-- Terminal body -->
       <div class="terminal-body flex-1 relative" style="min-height: 300px;">
         <div class="terminal-container w-full h-full"></div>
-        <!-- 터미널 없을 때 표시 -->
+        <!-- Shown when no terminals are open -->
         <div class="terminal-placeholder absolute inset-0 flex items-center justify-center text-slate-500">
           <div class="text-center">
             <div class="text-4xl mb-3">⌨️</div>
@@ -65,7 +65,7 @@ export class TerminalPanel {
     this.setupSTT();
     terminalRouter.init();
 
-    // 자동 실행
+    // Auto-run
     if (this.autoRunClaude) {
       setTimeout(() => this.createAndRunClaude(), 100);
     }
@@ -73,7 +73,7 @@ export class TerminalPanel {
     return container;
   }
 
-  // --- 터미널 생성 ---
+  // --- Terminal creation ---
   async createTerminalSession(runClaude = false) {
     const result = await window.api.terminal.create(this.projectId, this.projectPath);
     if (result.error) {
@@ -93,16 +93,16 @@ export class TerminalPanel {
     const fitAddon = new window.FitAddon.FitAddon();
     term.loadAddon(fitAddon);
 
-    // 각 터미널의 독립 wrapper 생성
+    // Create independent wrapper for each terminal
     const wrapper = document.createElement('div');
     wrapper.className = 'terminal-wrapper w-full h-full';
 
-    // 탭 추가
+    // Add tab
     const tab = { termId, term, fitAddon, wrapper, title: runClaude ? '🤖 Claude' : '⌨️ Terminal' };
     this.tabs.push(tab);
     this.activeTabIndex = this.tabs.length - 1;
 
-    // 라우터에 콜백 등록
+    // Register callbacks with router
     terminalRouter.register(
       termId,
       (data) => tab.term.write(data),
@@ -113,16 +113,16 @@ export class TerminalPanel {
       }
     );
 
-    // 탭 UI 업데이트
+    // Update tab UI
     this.renderTabs();
 
-    // 기존 wrapper 숨기기, 새 wrapper만 보이기
+    // Hide existing wrappers, show only new wrapper
     const termContainer = this.container.querySelector('.terminal-container');
     termContainer.querySelectorAll('.terminal-wrapper').forEach(w => w.style.display = 'none');
     termContainer.appendChild(wrapper);
     term.open(wrapper);
 
-    // fitAddon은 DOM에 마운트된 후 호출
+    // Call fitAddon after DOM mount
     requestAnimationFrame(() => {
       try {
         fitAddon.fit();
@@ -135,23 +135,23 @@ export class TerminalPanel {
       } catch (e) { /* ignore initial fit errors */ }
     });
 
-    // placeholder 숨기기
+    // Hide placeholder
     const placeholder = this.container.querySelector('.terminal-placeholder');
     if (placeholder) placeholder.style.display = 'none';
 
-    // renderer → main (키 입력)
+    // renderer -> main (key input)
     term.onData((data) => {
       window.api.terminal.input(termId, data);
     });
 
-    // 터미널 클릭 시 포커스 보장
+    // Ensure focus on terminal click
     wrapper.addEventListener('click', () => {
       term.focus();
     });
 
-    // Electron이 일부 키를 가로채지 않도록 처리
+    // Prevent Electron from intercepting certain keys
     term.attachCustomKeyEventHandler((e) => {
-      // Cmd+C (복사), Cmd+V (붙여넣기)는 브라우저에 위임
+      // Delegate Cmd+C (copy), Cmd+V (paste) to browser
       if (e.metaKey && (e.key === 'c' || e.key === 'v')) {
         return false;
       }
@@ -162,10 +162,10 @@ export class TerminalPanel {
       return true;
     });
 
-    // 즉시 포커스
+    // Immediate focus
     term.focus();
 
-    // 리사이즈 핸들링
+    // Resize handling
     this.resizeObserver = new ResizeObserver(() => {
       try {
         fitAddon.fit();
@@ -177,7 +177,7 @@ export class TerminalPanel {
     });
     this.resizeObserver.observe(termContainer);
 
-    // Claude Code 실행
+    // Run Claude Code
     if (runClaude) {
       setTimeout(() => {
         window.api.terminal.runClaude(termId);
@@ -193,7 +193,7 @@ export class TerminalPanel {
     await this.createTerminalSession(true);
   }
 
-  // --- 탭 UI ---
+  // --- Tab UI ---
   renderTabs() {
     const tabsList = this.container.querySelector('.tabs-list');
     tabsList.innerHTML = '';
@@ -226,7 +226,7 @@ export class TerminalPanel {
     this.activeTabIndex = index;
     const tab = this.tabs[index];
 
-    // 모든 wrapper 숨기고 선택된 것만 보이기
+    // Hide all wrappers and show only the selected one
     const termContainer = this.container.querySelector('.terminal-container');
     termContainer.querySelectorAll('.terminal-wrapper').forEach(w => w.style.display = 'none');
     tab.wrapper.style.display = '';
@@ -264,7 +264,7 @@ export class TerminalPanel {
     this.renderTabs();
   }
 
-  // --- 이벤트 ---
+  // --- Events ---
   setupEventListeners() {
     this.container.querySelector('.btn-new-terminal').addEventListener('click', () => {
       if (this.isSSH) {
@@ -328,7 +328,7 @@ export class TerminalPanel {
     }
   }
 
-  // --- SSH 터미널 ---
+  // --- SSH Terminal ---
   async createSSHSession(projectId, sshConfig) {
     const result = await window.api.terminal.createSSH(projectId, sshConfig);
     if (result.error) {
@@ -475,7 +475,7 @@ export class TerminalPanel {
     store.on('terminal-settings-changed', this._onSettingsChanged);
   }
 
-  // --- 정리 ---
+  // --- Cleanup ---
   destroy() {
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
     if (this.resizeObserver) this.resizeObserver.disconnect();

@@ -17,9 +17,9 @@ export class STTSetupGuideModal {
     this.content.innerHTML = this._buildContent(this.status);
 
     this.modal = new Modal({
-      title: '🎙️ STT 설정 가이드',
+      title: '🎙️ STT Setup Guide',
       content: this.content,
-      confirmText: '닫기',
+      confirmText: 'Close',
       showCancel: false,
       onConfirm: () => {
         this._removeProgressListener();
@@ -58,7 +58,7 @@ export class STTSetupGuideModal {
     this._setupEvents();
 
     if (this.status.installed && this.status.hasModel) {
-      Toast.show('STT 설정 완료! PgDn 더블탭으로 시작하세요.', 'success');
+      Toast.show('STT setup complete! Double-tap PgDn to start.', 'success');
     }
   }
 
@@ -70,32 +70,32 @@ export class STTSetupGuideModal {
     return `
       <div class="stt-setup-guide">
         <p class="text-sm text-slate-400 mb-4">
-          음성 입력(STT)을 사용하려면 whisper-cpp가 필요합니다.
+          whisper-cpp is required to use Speech-to-Text (STT).
         </p>
 
         <!-- Step 1: Install whisper-cpp -->
         <div class="stt-setup-step ${status.installed ? 'stt-setup-step--done' : ''}">
           <div class="stt-setup-step-header">
             <span class="stt-setup-status-dot">${installedIcon}</span>
-            <span class="text-sm font-medium text-slate-200">1단계: whisper-cpp 설치</span>
+            <span class="text-sm font-medium text-slate-200">Step 1: Install whisper-cpp</span>
           </div>
           ${!status.installed ? `
             <div class="stt-setup-step-body">
               <div class="stt-setup-code-block">
                 <code>brew install whisper-cpp</code>
-                <button class="stt-setup-copy-btn" data-cmd="brew install whisper-cpp" title="복사">📋</button>
+                <button class="stt-setup-copy-btn" data-cmd="brew install whisper-cpp" title="Copy">📋</button>
               </div>
               <div class="flex items-center gap-2 mt-2">
                 <button class="stt-setup-run-btn btn-primary text-xs px-3 py-1.5" data-action="install">
-                  ▶ 자동 설치
+                  ▶ Auto Install
                 </button>
-                <span class="text-xs text-slate-500">Homebrew를 사용하여 설치합니다</span>
+                <span class="text-xs text-slate-500">Installs via Homebrew</span>
               </div>
               <div class="stt-setup-log" data-step="install" style="display:none;"></div>
             </div>
           ` : `
             <div class="stt-setup-step-body">
-              <p class="text-xs text-green-400">whisper-cpp가 설치되어 있습니다.</p>
+              <p class="text-xs text-green-400">whisper-cpp is installed.</p>
             </div>
           `}
         </div>
@@ -104,26 +104,26 @@ export class STTSetupGuideModal {
         <div class="stt-setup-step ${status.hasModel ? 'stt-setup-step--done' : ''}">
           <div class="stt-setup-step-header">
             <span class="stt-setup-status-dot">${modelIcon}</span>
-            <span class="text-sm font-medium text-slate-200">2단계: 모델 다운로드</span>
+            <span class="text-sm font-medium text-slate-200">Step 2: Download Model</span>
           </div>
           ${!status.hasModel ? `
             <div class="stt-setup-step-body">
               <div class="stt-setup-code-block">
                 <code>whisper-cpp --download-model small</code>
-                <button class="stt-setup-copy-btn" data-cmd="whisper-cpp --download-model small" title="복사">📋</button>
+                <button class="stt-setup-copy-btn" data-cmd="whisper-cpp --download-model small" title="Copy">📋</button>
               </div>
               <div class="flex items-center gap-2 mt-2">
                 <button class="stt-setup-run-btn btn-primary text-xs px-3 py-1.5" data-action="model"
-                  ${!status.installed ? 'disabled title="whisper-cpp를 먼저 설치하세요"' : ''}>
-                  ▶ 자동 다운로드
+                  ${!status.installed ? 'disabled title="Install whisper-cpp first"' : ''}>
+                  ▶ Auto Download
                 </button>
-                <span class="text-xs text-slate-500">약 500MB 디스크 공간 필요</span>
+                <span class="text-xs text-slate-500">Requires ~500MB disk space</span>
               </div>
               <div class="stt-setup-log" data-step="model" style="display:none;"></div>
             </div>
           ` : `
             <div class="stt-setup-step-body">
-              <p class="text-xs text-green-400">모델이 준비되어 있습니다${status.models ? ` (${status.models.map(m => m.name).join(', ')})` : ''}.</p>
+              <p class="text-xs text-green-400">Model is ready${status.models ? ` (${status.models.map(m => m.name).join(', ')})` : ''}.</p>
             </div>
           `}
         </div>
@@ -131,10 +131,10 @@ export class STTSetupGuideModal {
         <!-- Actions -->
         <div class="flex items-center gap-3 mt-4">
           <button class="stt-setup-recheck-btn btn-secondary text-sm px-3 py-1.5">
-            🔄 다시 확인
+            🔄 Recheck
           </button>
           ${allDone ? `
-            <span class="text-sm text-green-400">✅ 모든 설정이 완료되었습니다! PgDn 더블탭으로 STT를 시작하세요.</span>
+            <span class="text-sm text-green-400">✅ All set! Double-tap PgDn to start STT.</span>
           ` : ''}
         </div>
       </div>
@@ -149,7 +149,7 @@ export class STTSetupGuideModal {
       btn.addEventListener('click', () => {
         const cmd = btn.dataset.cmd;
         navigator.clipboard.writeText(cmd).then(() => {
-          Toast.show('명령어가 복사되었습니다', 'success');
+          Toast.show('Command copied to clipboard', 'success');
           btn.textContent = '✅';
           setTimeout(() => { btn.textContent = '📋'; }, 1500);
         });
@@ -161,11 +161,11 @@ export class STTSetupGuideModal {
       btn.addEventListener('click', async () => {
         const action = btn.dataset.action;
         btn.disabled = true;
-        btn.innerHTML = '<span class="stt-spinner" style="width:12px;height:12px;"></span> 실행 중...';
+        btn.innerHTML = '<span class="stt-spinner" style="width:12px;height:12px;"></span> Running...';
 
         const logEl = content.querySelector(`.stt-setup-log[data-step="${action === 'install' ? 'install' : 'model'}"]`);
         if (logEl) {
-          logEl.textContent = '시작 중...';
+          logEl.textContent = 'Starting...';
           logEl.style.display = '';
         }
 
@@ -176,9 +176,9 @@ export class STTSetupGuideModal {
             await window.api.stt.downloadModel('small');
           }
         } catch (e) {
-          Toast.show(e.message || '실행 실패', 'error');
+          Toast.show(e.message || 'Execution failed', 'error');
           btn.disabled = false;
-          btn.textContent = action === 'install' ? '▶ 자동 설치' : '▶ 자동 다운로드';
+          btn.textContent = action === 'install' ? '▶ Auto Install' : '▶ Auto Download';
         }
       });
     });
@@ -188,7 +188,7 @@ export class STTSetupGuideModal {
     if (recheckBtn) {
       recheckBtn.addEventListener('click', async () => {
         recheckBtn.disabled = true;
-        recheckBtn.textContent = '확인 중...';
+        recheckBtn.textContent = 'Checking...';
         await this._refreshStatus();
       });
     }

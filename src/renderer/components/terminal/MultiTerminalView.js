@@ -122,7 +122,7 @@ export class MultiTerminalView {
         if (action === 'blank') {
           this.addTerminal('__blank__', '', '⌨️ Terminal');
         } else if (action === 'project') {
-          // SSH 설정이 있는 프로젝트는 자동으로 SSH 접속
+          // Projects with SSH config automatically connect via SSH
           const proj = (store.getState().projects || []).find(p => p.id === item.dataset.projectId);
           if (proj && proj.ssh_host) {
             this.addSSHTerminal(proj.id, `🔒 ${proj.ssh_username}@${proj.ssh_host}`);

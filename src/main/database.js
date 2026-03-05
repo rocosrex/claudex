@@ -167,7 +167,7 @@ function createProject(data) {
     data.ssh_startup_command || '',
     data.ssh_remote_path || ''
   );
-  addActivity(id, 'project_created', `프로젝트 "${data.name}" 생성`);
+  addActivity(id, 'project_created', `Project "${data.name}" created`);
   return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
 }
 
@@ -193,7 +193,7 @@ function updateProject(id, data) {
   values.push(id);
 
   db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-  addActivity(id, 'project_updated', `프로젝트 수정`);
+  addActivity(id, 'project_updated', `Project updated`);
   return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
 }
 
@@ -229,7 +229,7 @@ function createTodo(projectId, data) {
     now,
     now
   );
-  addActivity(projectId, 'todo_created', `할 일 "${data.title}" 추가`);
+  addActivity(projectId, 'todo_created', `Todo "${data.title}" added`);
   return db.prepare('SELECT * FROM todos WHERE id = ?').get(id);
 }
 
@@ -256,7 +256,7 @@ function updateTodo(id, data) {
   db.prepare(`UPDATE todos SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
   if (data.completed !== undefined) {
-    addActivity(existing.project_id, data.completed ? 'todo_completed' : 'todo_uncompleted', `할 일 "${existing.title}"`);
+    addActivity(existing.project_id, data.completed ? 'todo_completed' : 'todo_uncompleted', `Todo "${existing.title}"`);
   }
 
   return db.prepare('SELECT * FROM todos WHERE id = ?').get(id);
@@ -266,7 +266,7 @@ function deleteTodo(id) {
   const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(id);
   if (!todo) return false;
   db.prepare('DELETE FROM todos WHERE id = ?').run(id);
-  addActivity(todo.project_id, 'todo_deleted', `할 일 "${todo.title}" 삭제`);
+  addActivity(todo.project_id, 'todo_deleted', `Todo "${todo.title}" deleted`);
   return true;
 }
 
@@ -295,7 +295,7 @@ function createNote(projectId, data) {
     now,
     now
   );
-  addActivity(projectId, 'note_created', `노트 "${data.title}" 생성`);
+  addActivity(projectId, 'note_created', `Note "${data.title}" created`);
   return db.prepare('SELECT * FROM notes WHERE id = ?').get(id);
 }
 
@@ -335,7 +335,7 @@ function deleteNote(id) {
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(id);
   if (!note) return false;
   db.prepare('DELETE FROM notes WHERE id = ?').run(id);
-  addActivity(note.project_id, 'note_deleted', `노트 "${note.title}" 삭제`);
+  addActivity(note.project_id, 'note_deleted', `Note "${note.title}" deleted`);
   return true;
 }
 
@@ -352,7 +352,7 @@ function startTimeLog(projectId, description) {
     INSERT INTO time_logs (id, project_id, description, started_at, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(id, projectId, description || '', now, now, now);
-  addActivity(projectId, 'timer_started', `타이머 시작: ${description || '(설명 없음)'}`);
+  addActivity(projectId, 'timer_started', `Timer started: ${description || '(no description)'}`);
   return db.prepare('SELECT * FROM time_logs WHERE id = ?').get(id);
 }
 
@@ -370,7 +370,7 @@ function stopTimeLog(id) {
     UPDATE time_logs SET ended_at = ?, duration_minutes = ?, updated_at = ? WHERE id = ?
   `).run(now, durationMinutes, now, id);
 
-  addActivity(log.project_id, 'timer_stopped', `타이머 종료 (${durationMinutes}분)`);
+  addActivity(log.project_id, 'timer_stopped', `Timer stopped (${durationMinutes} min)`);
   return db.prepare('SELECT * FROM time_logs WHERE id = ?').get(id);
 }
 

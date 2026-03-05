@@ -117,19 +117,19 @@ export class ProjectDetail {
     // Delete button
     header.querySelector('.btn-delete').addEventListener('click', () => {
       const modal = new Modal({
-        title: '프로젝트 삭제',
-        content: `<p class="text-slate-300">"<strong>${this.project.name}</strong>" 프로젝트를 삭제하시겠습니까?</p><p class="text-sm text-slate-500 mt-2">할 일, 노트, 타이머 기록이 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</p>`,
-        confirmText: '삭제',
+        title: 'Delete Project',
+        content: `<p class="text-slate-300">Are you sure you want to delete "<strong>${this.project.name}</strong>"?</p><p class="text-sm text-slate-500 mt-2">All todos, notes, and timer records will be permanently deleted. This action cannot be undone.</p>`,
+        confirmText: 'Delete',
         onConfirm: async () => {
           try {
             await window.api.projects.delete(this.project.id);
             const projects = await window.api.projects.list();
             store.setState({ projects, selectedProjectId: null });
             modal.close();
-            Toast.show('프로젝트가 삭제되었습니다', 'info');
+            Toast.show('Project deleted', 'info');
             if (this.onNavigate) this.onNavigate('dashboard');
           } catch (e) {
-            Toast.show('프로젝트 삭제 실패', 'error');
+            Toast.show('Failed to delete project', 'error');
           }
         },
       });
@@ -172,14 +172,14 @@ export class ProjectDetail {
 
     const content = this.container.querySelector('.tab-content');
 
-    // 터미널 탭은 캐시하여 재생성 방지
+    // Cache terminal tab to prevent re-creation
     if (tabId === 'terminal' && this._terminalEl) {
       content.innerHTML = '';
       content.appendChild(this._terminalEl);
       return;
     }
 
-    // 터미널 탭에서 벗어날 때 DOM에서 분리만 (destroy 안 함)
+    // Detach from DOM when leaving terminal tab (do not destroy)
     if (this._terminalEl && this._terminalEl.parentNode === content) {
       content.removeChild(this._terminalEl);
     }

@@ -105,7 +105,7 @@ export class Sidebar {
         </button>
         <button class="btn-open-source-licenses w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-slate-500 hover:text-slate-400 transition-all text-xs"
                 title="Open Source Licenses">
-          <span>📄</span><span>오픈소스 라이선스</span>
+          <span>📄</span><span>Open Source Licenses</span>
         </button>
       </div>
     `;
@@ -156,6 +156,45 @@ export class Sidebar {
 
     // Close context menu on click outside
     document.addEventListener('click', () => this.closeContextMenu());
+
+    // File watcher: auto-refresh tree on file system changes
+    window.api.watcher.onChange((projectId, data) => {
+      if (this.expandedProjects.has(projectId)) {
+        this.refreshProjectTree(projectId);
+      }
+    });
+  }
+
+  async refreshProjectTree(projectId) {
+    // Invalidate cache and re-render
+    this.filesCache.delete(projectId);
+    const { projects } = store.getState();
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const isRemote = !!project.ssh_host;
+    try {
+      if (isRemote) {
+        let remotePath = project.ssh_remote_path || '';
+        if (!remotePath) {
+          const homeDir = await window.api.remote.homeDir(projectId);
+          if (homeDir && !homeDir.error) remotePath = homeDir;
+          else remotePath = '/';
+        }
+        const result = await window.api.remote.listFiles(projectId, remotePath);
+        if (result && !result.error) {
+          this.filesCache.set(projectId, Array.isArray(result) ? result : []);
+        }
+      } else {
+        const files = await window.api.files.list(project.path);
+        this.filesCache.set(projectId, files);
+      }
+    } catch (e) {
+      console.error('Failed to refresh file tree:', e);
+      return;
+    }
+
+    this.renderProjects();
   }
 
   showContextMenu(e, folderPath, project) {
@@ -180,6 +219,16 @@ export class Sidebar {
     }
 
     if (project) {
+      const refreshItem = document.createElement('div');
+      refreshItem.className = 'sidebar-context-menu-item';
+      refreshItem.textContent = '🔄 Refresh';
+      refreshItem.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.closeContextMenu();
+        this.refreshProjectTree(project.id);
+      });
+      menu.appendChild(refreshItem);
+
       const deleteItem = document.createElement('div');
       deleteItem.className = 'sidebar-context-menu-item';
       deleteItem.style.color = '#f87171';
@@ -212,9 +261,9 @@ export class Sidebar {
 
   confirmDeleteProject(project) {
     const modal = new Modal({
-      title: '프로젝트 삭제',
-      content: `<p class="text-slate-300">"<strong>${project.name}</strong>" 프로젝트를 삭제하시겠습니까?</p><p class="text-sm text-slate-500 mt-2">할 일, 노트, 타이머 기록이 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</p>`,
-      confirmText: '삭제',
+      title: 'Delete Project',
+      content: `<p class="text-slate-300">Are you sure you want to delete "<strong>${project.name}</strong>"?</p><p class="text-sm text-slate-500 mt-2">All todos, notes, and time logs will be permanently deleted. This action cannot be undone.</p>`,
+      confirmText: 'Delete',
       onConfirm: async () => {
         try {
           await window.api.projects.delete(project.id);
@@ -223,10 +272,10 @@ export class Sidebar {
           const projects = await window.api.projects.list();
           store.setState({ projects, selectedProjectId: null });
           modal.close();
-          Toast.show('프로젝트가 삭제되었습니다', 'info');
+          Toast.show('Project deleted', 'info');
           if (this.onNavigate) this.onNavigate('dashboard');
         } catch (e) {
-          Toast.show('프로젝트 삭제 실패', 'error');
+          Toast.show('Failed to delete project', 'error');
         }
       },
     });
@@ -329,10 +378,18 @@ export class Sidebar {
       if (tree) tree.remove();
       const toggle = wrapper.querySelector('.docs-toggle');
       if (toggle) toggle.classList.remove('expanded');
+      // Stop watching when collapsed (local projects only)
+      if (projectPath && !(project && project.ssh_host)) {
+        window.api.watcher.stop(projectId);
+      }
       return;
     }
 
     this.expandedProjects.add(projectId);
+    // Start watching when expanded (local projects only)
+    if (projectPath && !(project && project.ssh_host)) {
+      window.api.watcher.start(projectId, projectPath);
+    }
     const toggle = wrapper.querySelector('.docs-toggle');
     if (toggle) toggle.classList.add('expanded');
 
@@ -360,7 +417,7 @@ export class Sidebar {
         // Show error in tree
         const errEl = document.createElement('div');
         errEl.className = 'sidebar-docs-tree';
-        errEl.innerHTML = `<div class="sidebar-docs-item empty" style="padding-left:2rem;font-size:0.7rem;color:#f87171;">${isRemote ? 'SSH 연결 실패' : 'Error'}: ${e.message || 'Unknown'}</div>`;
+        errEl.innerHTML = `<div class="sidebar-docs-item empty" style="padding-left:2rem;font-size:0.7rem;color:#f87171;">${isRemote ? 'SSH connection failed' : 'Error'}: ${e.message || 'Unknown'}</div>`;
         wrapper.appendChild(errEl);
         return;
       }
@@ -432,10 +489,71 @@ export class Sidebar {
           }
         });
 
-        // Right-click → Reveal in Finder (local only)
+        // Right-click → Reveal in Finder (local only) + project context
         if (!remote) {
-          folderItem.addEventListener('contextmenu', (e) => this.showContextMenu(e, f.absolutePath));
+          folderItem.addEventListener('contextmenu', (e) => {
+            const { projects } = store.getState();
+            const proj = projects.find(p => p.id === projectId);
+            this.showContextMenu(e, f.absolutePath, proj);
+          });
         }
+
+        // Drag & drop: accept files from Finder
+        folderItem.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'copy';
+          folderItem.classList.add('drag-over');
+        });
+        folderItem.addEventListener('dragleave', (e) => {
+          e.stopPropagation();
+          folderItem.classList.remove('drag-over');
+        });
+        folderItem.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          folderItem.classList.remove('drag-over');
+          const droppedFiles = e.dataTransfer.files;
+          if (!droppedFiles || droppedFiles.length === 0) return;
+
+          for (const file of droppedFiles) {
+            const fileName = file.name;
+            if (remote) {
+              // SSH: read file as base64 then upload via SFTP
+              try {
+                const reader = new FileReader();
+                reader.onload = async () => {
+                  const base64 = reader.result.split(',')[1];
+                  const remoteDest = f.absolutePath + '/' + fileName;
+                  const result = await window.api.remote.uploadBinary(projectId, remoteDest, base64);
+                  if (result && result.error) {
+                    Toast.show(`Upload failed: ${result.error}`, 'error');
+                  } else {
+                    Toast.show(`Uploaded ${fileName}`, 'success');
+                    this.refreshProjectTree(projectId);
+                  }
+                };
+                reader.readAsDataURL(file);
+              } catch (err) {
+                Toast.show(`Upload failed: ${err.message}`, 'error');
+              }
+            } else {
+              // Local: copy file
+              try {
+                const srcPath = file.path;
+                const destPath = f.absolutePath + '/' + fileName;
+                const result = await window.api.files.copyTo(srcPath, destPath);
+                if (result && result.error) {
+                  Toast.show(`Copy failed: ${result.error}`, 'error');
+                } else {
+                  Toast.show(`Copied ${fileName}`, 'success');
+                }
+              } catch (err) {
+                Toast.show(`Copy failed: ${err.message}`, 'error');
+              }
+            }
+          }
+        });
 
         tree.appendChild(folderItem);
 
@@ -499,9 +617,9 @@ export class Sidebar {
     const licenses = [
       { name: 'Electron', url: 'https://github.com/electron/electron', license: 'MIT' },
       { name: 'whisper.cpp', url: 'https://github.com/ggml-org/whisper.cpp', license: 'MIT' },
-      { name: 'OpenAI Whisper (모델)', url: 'https://github.com/openai/whisper', license: 'MIT' },
+      { name: 'OpenAI Whisper (Model)', url: 'https://github.com/openai/whisper', license: 'MIT' },
       { name: 'sherpa-onnx-node', url: 'https://github.com/k2-fsa/sherpa-onnx', license: 'Apache-2.0' },
-      { name: '3D-Speaker / ERes2Net (모델)', url: 'https://github.com/modelscope/3D-Speaker', license: 'Apache-2.0' },
+      { name: '3D-Speaker / ERes2Net (Model)', url: 'https://github.com/modelscope/3D-Speaker', license: 'Apache-2.0' },
       { name: 'better-sqlite3', url: 'https://github.com/WiseLibs/better-sqlite3', license: 'MIT' },
       { name: 'node-pty', url: 'https://github.com/microsoft/node-pty', license: 'MIT' },
       { name: 'xterm.js', url: 'https://github.com/xtermjs/xterm.js', license: 'MIT' },
@@ -522,26 +640,26 @@ export class Sidebar {
 
     const content = document.createElement('div');
     content.innerHTML = `
-      <p class="text-xs text-slate-400 mb-3">이 앱은 아래 오픈소스 소프트웨어를 사용합니다.</p>
+      <p class="text-xs text-slate-400 mb-3">This app uses the following open source software.</p>
       <div style="max-height:360px;overflow-y:auto;">
         <table class="w-full">
           <thead>
             <tr class="border-b border-slate-600 text-left">
-              <th class="pb-2 text-xs font-medium text-slate-400">이름</th>
-              <th class="pb-2 text-xs font-medium text-slate-400">라이선스</th>
-              <th class="pb-2 text-xs font-medium text-slate-400">저장소</th>
+              <th class="pb-2 text-xs font-medium text-slate-400">Name</th>
+              <th class="pb-2 text-xs font-medium text-slate-400">License</th>
+              <th class="pb-2 text-xs font-medium text-slate-400">Repository</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
-      <p class="text-xs text-slate-500 mt-3">MIT, Apache-2.0 라이선스는 상업적 사용, 수정, 재배포를 허용합니다.</p>
+      <p class="text-xs text-slate-500 mt-3">MIT and Apache-2.0 licenses permit commercial use, modification, and redistribution.</p>
     `;
 
     const modal = new Modal({
-      title: '📄 오픈소스 라이선스',
+      title: '📄 Open Source Licenses',
       content,
-      confirmText: '닫기',
+      confirmText: 'Close',
       showCancel: false,
       onConfirm: () => modal.close(),
     });

@@ -81,7 +81,7 @@ export class ProjectForm {
         </select>
       </div>
 
-      <!-- SSH 설정 -->
+      <!-- SSH Settings -->
       <div class="ssh-settings">
         <div class="ssh-settings-header">
           <span>🔒 SSH Remote Settings</span>

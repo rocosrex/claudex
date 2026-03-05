@@ -26,7 +26,7 @@ export class STTRecorder {
           <span class="text-3xl">🎙️</span>
           <div>
             <h2 class="text-xl font-semibold text-slate-100">Speech to Text</h2>
-            <p class="text-sm text-slate-400">whisper.cpp 로컬 음성 인식 (PoC)</p>
+            <p class="text-sm text-slate-400">whisper.cpp Local Speech Recognition (PoC)</p>
           </div>
         </div>
 
@@ -34,29 +34,29 @@ export class STTRecorder {
         <div class="stt-status-card card p-4 mb-6">
           <div class="flex items-center gap-2 mb-2">
             <span class="stt-status-dot"></span>
-            <span class="stt-status-text text-sm text-slate-400">상태 확인 중...</span>
+            <span class="stt-status-text text-sm text-slate-400">Checking status...</span>
           </div>
           <div class="stt-status-detail text-xs text-slate-500"></div>
         </div>
 
         <!-- Settings -->
         <div class="card p-4 mb-6">
-          <h3 class="text-sm font-medium text-slate-300 mb-3">설정</h3>
+          <h3 class="text-sm font-medium text-slate-300 mb-3">Settings</h3>
           <div class="flex gap-4">
             <div class="flex-1">
-              <label class="block text-xs text-slate-500 mb-1">모델</label>
+              <label class="block text-xs text-slate-500 mb-1">Model</label>
               <select class="stt-model-select input text-sm w-full">
-                <option value="small">small (기본, ~500MB)</option>
+                <option value="small">small (default, ~500MB)</option>
               </select>
             </div>
             <div class="flex-1">
-              <label class="block text-xs text-slate-500 mb-1">언어</label>
+              <label class="block text-xs text-slate-500 mb-1">Language</label>
               <select class="stt-lang-select input text-sm w-full">
-                <option value="ko">한국어</option>
+                <option value="ko">Korean</option>
                 <option value="en">English</option>
-                <option value="ja">日本語</option>
-                <option value="zh">中文</option>
-                <option value="auto">자동 감지</option>
+                <option value="ja">Japanese</option>
+                <option value="zh">Chinese</option>
+                <option value="auto">Auto Detect</option>
               </select>
             </div>
           </div>
@@ -69,12 +69,12 @@ export class STTRecorder {
           <div class="flex items-center justify-center gap-4 mb-4">
             <button class="stt-record-btn w-16 h-16 rounded-full flex items-center justify-center text-2xl transition-all"
                     style="background:rgba(239,68,68,0.15); color:#ef4444; border:2px solid rgba(239,68,68,0.3);"
-                    title="녹음 시작 / 중지">
+                    title="Start / Stop Recording">
               ⏺
             </button>
           </div>
 
-          <div class="stt-record-status text-sm text-slate-500">마이크 버튼을 눌러 녹음을 시작하세요</div>
+          <div class="stt-record-status text-sm text-slate-500">Press the microphone button to start recording</div>
           <div class="stt-record-timer text-xs text-slate-600 mt-1" style="display:none;">0:00</div>
         </div>
 
@@ -82,7 +82,7 @@ export class STTRecorder {
         <div class="stt-transcribing card p-4 mb-6 text-center" style="display:none;">
           <div class="flex items-center justify-center gap-2">
             <div class="stt-spinner"></div>
-            <span class="text-sm text-slate-300">변환 중...</span>
+            <span class="text-sm text-slate-300">Transcribing...</span>
           </div>
         </div>
 
@@ -129,7 +129,7 @@ export class STTRecorder {
 
       if (status.installed && status.hasModel) {
         statusDot.style.background = '#22c55e';
-        statusText.textContent = 'whisper-cpp 준비 완료';
+        statusText.textContent = 'whisper-cpp ready';
         statusDetail.textContent = `Binary: ${status.binaryPath}`;
 
         // Populate model select
@@ -146,30 +146,30 @@ export class STTRecorder {
         }
       } else if (status.installed && !status.hasModel) {
         statusDot.style.background = '#f59e0b';
-        statusText.textContent = '모델을 다운로드하세요';
+        statusText.textContent = 'Please download a model';
         statusDetail.innerHTML = '<code style="background:#1e293b;padding:2px 6px;border-radius:4px;">whisper-cpp --download-model small</code>';
       } else {
         statusDot.style.background = '#ef4444';
-        statusText.textContent = 'whisper-cpp가 설치되지 않았습니다';
+        statusText.textContent = 'whisper-cpp is not installed';
         statusDetail.innerHTML = '<code style="background:#1e293b;padding:2px 6px;border-radius:4px;">brew install whisper-cpp</code>';
       }
     } catch (e) {
       statusDot.style.background = '#ef4444';
-      statusText.textContent = '상태 확인 실패';
+      statusText.textContent = 'Status check failed';
       statusDetail.textContent = e.message;
     }
   }
 
   async startRecording() {
     if (!this.whisperStatus?.installed || !this.whisperStatus?.hasModel) {
-      Toast.show('whisper-cpp가 설치되지 않았거나 모델이 없습니다', 'error');
+      Toast.show('whisper-cpp is not installed or model is missing', 'error');
       return;
     }
 
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-      Toast.show('마이크 접근이 거부되었습니다', 'error');
+      Toast.show('Microphone access denied', 'error');
       return;
     }
 
@@ -199,7 +199,7 @@ export class STTRecorder {
     btn.style.borderColor = '#ef4444';
     btn.classList.add('stt-recording-pulse');
 
-    this.container.querySelector('.stt-record-status').textContent = '녹음 중... 버튼을 눌러 중지';
+    this.container.querySelector('.stt-record-status').textContent = 'Recording... Press button to stop';
     const timerEl = this.container.querySelector('.stt-record-timer');
     timerEl.style.display = '';
     this.recordStart = Date.now();
@@ -242,7 +242,7 @@ export class STTRecorder {
   async processRecording() {
     if (this.audioChunks.length === 0) return;
 
-    this.container.querySelector('.stt-record-status').textContent = 'WAV 변환 중...';
+    this.container.querySelector('.stt-record-status').textContent = 'Converting to WAV...';
     this.container.querySelector('.stt-transcribing').style.display = '';
 
     try {
@@ -250,7 +250,7 @@ export class STTRecorder {
       const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
       const wavBuffer = await this.convertToWav(blob);
 
-      this.container.querySelector('.stt-record-status').textContent = 'whisper-cpp 변환 중...';
+      this.container.querySelector('.stt-record-status').textContent = 'Transcribing with whisper-cpp...';
 
       // Send to main process
       const result = await window.api.stt.transcribe(
@@ -259,10 +259,10 @@ export class STTRecorder {
       );
 
       this.addResult(result);
-      this.container.querySelector('.stt-record-status').textContent = '마이크 버튼을 눌러 녹음을 시작하세요';
+      this.container.querySelector('.stt-record-status').textContent = 'Press the microphone button to start recording';
     } catch (e) {
-      Toast.show(`변환 실패: ${e.message}`, 'error');
-      this.container.querySelector('.stt-record-status').textContent = '변환 실패. 다시 시도하세요.';
+      Toast.show(`Transcription failed: ${e.message}`, 'error');
+      this.container.querySelector('.stt-record-status').textContent = 'Transcription failed. Please try again.';
     } finally {
       this.container.querySelector('.stt-transcribing').style.display = 'none';
     }
@@ -340,7 +340,7 @@ export class STTRecorder {
 
     const header = document.createElement('h3');
     header.className = 'text-sm font-medium text-slate-400 mb-3';
-    header.textContent = `변환 결과 (${this.results.length})`;
+    header.textContent = `Results (${this.results.length})`;
     container.appendChild(header);
 
     this.results.forEach((r, idx) => {
@@ -348,17 +348,17 @@ export class STTRecorder {
       card.className = 'card p-4 mb-3';
       card.innerHTML = `
         <div class="flex items-start justify-between gap-3">
-          <p class="text-slate-200 flex-1" style="white-space:pre-wrap;word-break:break-word;">${this.escapeHtml(r.text) || '<span class="text-slate-500">(인식된 텍스트 없음)</span>'}</p>
-          <button class="stt-copy-btn text-xs text-slate-500 hover:text-slate-300 flex-shrink-0" data-idx="${idx}" title="복사">📋</button>
+          <p class="text-slate-200 flex-1" style="white-space:pre-wrap;word-break:break-word;">${this.escapeHtml(r.text) || '<span class="text-slate-500">(No text recognized)</span>'}</p>
+          <button class="stt-copy-btn text-xs text-slate-500 hover:text-slate-300 flex-shrink-0" data-idx="${idx}" title="Copy">📋</button>
         </div>
         <div class="flex gap-3 mt-2 text-xs text-slate-500">
-          <span>모델: ${r.model}</span>
-          <span>언어: ${r.language}</span>
-          <span>소요: ${(r.elapsedMs / 1000).toFixed(1)}s</span>
+          <span>Model: ${r.model}</span>
+          <span>Language: ${r.language}</span>
+          <span>Elapsed: ${(r.elapsedMs / 1000).toFixed(1)}s</span>
         </div>
       `;
       card.querySelector('.stt-copy-btn').addEventListener('click', () => {
-        navigator.clipboard.writeText(r.text).then(() => Toast.show('복사됨', 'info', 1500));
+        navigator.clipboard.writeText(r.text).then(() => Toast.show('Copied', 'info', 1500));
       });
       container.appendChild(card);
     });

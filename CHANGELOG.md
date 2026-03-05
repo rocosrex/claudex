@@ -4,6 +4,17 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.2] - 2026-03-05
+
+### Added
+- File system watcher (chokidar) — auto-refreshes sidebar file tree on local changes
+- Finder drag & drop — drop files onto sidebar folders to copy (local) or upload (SSH/SFTP)
+- Context menu "Refresh" option for project file trees
+- Drag-over visual feedback CSS for drop targets
+
+### Changed
+- Translated 70+ Korean UI strings to English across 9 files (database, STT, sidebar, project, terminal)
+
 ## [1.10.1] - 2026-03-04
 
 ### Added

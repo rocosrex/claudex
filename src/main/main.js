@@ -8,6 +8,7 @@ const db = require('./database');
 const terminalManager = require('./terminal-manager');
 const externalTerminal = require('./external-terminal');
 const remoteFileManager = require('./remote-file-manager');
+const fileWatcher = require('./file-watcher');
 const sttManager = require('./stt-manager');
 const speakerManager = require('./speaker-manager');
 
@@ -398,7 +399,7 @@ ipcMain.handle('security:decryptPassword', (_, base64) => {
 
 ipcMain.handle('security:selectKeyFile', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'SSH 키 파일 선택',
+    title: 'Select SSH Key File',
     properties: ['openFile'],
     defaultPath: require('path').join(require('os').homedir(), '.ssh'),
     filters: [{ name: 'All Files', extensions: ['*'] }],
@@ -608,7 +609,53 @@ app.on('window-all-closed', () => {
   }
 });
 
+// --- IPC: File Watcher ---
+
+ipcMain.handle('watcher:start', (_, projectId, projectPath) => {
+  fileWatcher.startWatching(projectId, projectPath);
+  return { success: true };
+});
+
+ipcMain.handle('watcher:stop', (_, projectId) => {
+  fileWatcher.stopWatching(projectId);
+  return { success: true };
+});
+
+// --- IPC: File Copy ---
+
+ipcMain.handle('files:copyTo', async (_, srcPath, destPath) => {
+  try {
+    const destDir = path.dirname(destPath);
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+    fs.copyFileSync(srcPath, destPath);
+    return { success: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+// --- IPC: Remote Binary Upload ---
+
+ipcMain.handle('remote:uploadBinary', async (_, projectId, remotePath, base64Data) => {
+  try {
+    return await remoteFileManager.writeBinaryRemoteFile(projectId, remotePath, base64Data);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+// --- File Watcher Callback ---
+
+fileWatcher.setChangeCallback((projectId, data) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('watcher:change', projectId, data);
+  }
+});
+
 app.on('before-quit', () => {
   terminalManager.closeAll();
   remoteFileManager.disconnectAll();
+  fileWatcher.stopAll();
 });

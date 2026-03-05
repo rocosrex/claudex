@@ -187,16 +187,16 @@ function installWhisper(win) {
   return new Promise((resolve, reject) => {
     const brewPath = findBrewBinary();
     if (!brewPath) {
-      return reject(new Error('Homebrew가 설치되어 있지 않습니다. https://brew.sh 에서 먼저 설치하세요.'));
+      return reject(new Error('Homebrew is not installed. Please install it from https://brew.sh first.'));
     }
 
     // Check if already installed
     if (findWhisperBinary()) {
-      sendProgress(win, 'install', 'done', 'whisper-cpp가 이미 설치되어 있습니다.');
+      sendProgress(win, 'install', 'done', 'whisper-cpp is already installed.');
       return resolve({ success: true, alreadyInstalled: true });
     }
 
-    sendProgress(win, 'install', 'running', 'brew install whisper-cpp 실행 중...');
+    sendProgress(win, 'install', 'running', 'Running brew install whisper-cpp...');
 
     const proc = spawn(brewPath, ['install', 'whisper-cpp'], {
       env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1' },
@@ -214,11 +214,11 @@ function installWhisper(win) {
 
     proc.on('close', (code) => {
       if (code === 0) {
-        sendProgress(win, 'install', 'done', '설치 완료!');
+        sendProgress(win, 'install', 'done', 'Installation complete!');
         resolve({ success: true });
       } else {
-        sendProgress(win, 'install', 'error', `설치 실패 (exit code ${code})`);
-        reject(new Error(`brew install 실패 (code ${code}):\n${output.slice(-500)}`));
+        sendProgress(win, 'install', 'error', `Installation failed (exit code ${code})`);
+        reject(new Error(`brew install failed (code ${code}):\n${output.slice(-500)}`));
       }
     });
 
@@ -233,16 +233,16 @@ function downloadModel(modelName = 'small', win) {
   return new Promise((resolve, reject) => {
     const binary = findWhisperBinary();
     if (!binary) {
-      return reject(new Error('whisper-cpp가 먼저 설치되어야 합니다.'));
+      return reject(new Error('whisper-cpp must be installed first.'));
     }
 
     // Check if model already exists
     if (findModelPath(modelName)) {
-      sendProgress(win, 'model', 'done', `${modelName} 모델이 이미 존재합니다.`);
+      sendProgress(win, 'model', 'done', `${modelName} model already exists.`);
       return resolve({ success: true, alreadyExists: true });
     }
 
-    sendProgress(win, 'model', 'running', `${modelName} 모델 다운로드 중...`);
+    sendProgress(win, 'model', 'running', `Downloading ${modelName} model...`);
 
     const proc = spawn(binary, ['--download-model', modelName], {
       env: process.env,
@@ -260,11 +260,11 @@ function downloadModel(modelName = 'small', win) {
 
     proc.on('close', (code) => {
       if (code === 0) {
-        sendProgress(win, 'model', 'done', '모델 다운로드 완료!');
+        sendProgress(win, 'model', 'done', 'Model download complete!');
         resolve({ success: true });
       } else {
-        sendProgress(win, 'model', 'error', `다운로드 실패 (exit code ${code})`);
-        reject(new Error(`모델 다운로드 실패 (code ${code}):\n${output.slice(-500)}`));
+        sendProgress(win, 'model', 'error', `Download failed (exit code ${code})`);
+        reject(new Error(`Model download failed (code ${code}):\n${output.slice(-500)}`));
       }
     });
 

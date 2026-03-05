@@ -74,6 +74,13 @@ contextBridge.exposeInMainWorld('api', {
     readBinary: (filePath) => ipcRenderer.invoke('files:readBinary', filePath),
     write: (filePath, content) => ipcRenderer.invoke('files:write', filePath, content),
     create: (dirPath, fileName) => ipcRenderer.invoke('files:create', dirPath, fileName),
+    copyTo: (src, dest) => ipcRenderer.invoke('files:copyTo', src, dest),
+  },
+  // File Watcher
+  watcher: {
+    start: (projectId, projectPath) => ipcRenderer.invoke('watcher:start', projectId, projectPath),
+    stop: (projectId) => ipcRenderer.invoke('watcher:stop', projectId),
+    onChange: (callback) => ipcRenderer.on('watcher:change', (_, projectId, data) => callback(projectId, data)),
   },
   // Remote Files (SFTP)
   remote: {
@@ -81,6 +88,7 @@ contextBridge.exposeInMainWorld('api', {
     readFile: (projectId, remotePath) => ipcRenderer.invoke('remote:readFile', projectId, remotePath),
     readBinary: (projectId, remotePath) => ipcRenderer.invoke('remote:readBinary', projectId, remotePath),
     writeFile: (projectId, remotePath, content) => ipcRenderer.invoke('remote:writeFile', projectId, remotePath, content),
+    uploadBinary: (projectId, remotePath, base64) => ipcRenderer.invoke('remote:uploadBinary', projectId, remotePath, base64),
     homeDir: (projectId) => ipcRenderer.invoke('remote:homeDir', projectId),
     disconnect: (projectId) => ipcRenderer.invoke('remote:disconnect', projectId),
     testConnection: (sshConfig) => ipcRenderer.invoke('remote:testConnection', sshConfig),

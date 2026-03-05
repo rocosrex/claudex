@@ -309,12 +309,24 @@ async function browseRemoteDirs(sshConfig, remotePath) {
   }
 }
 
+async function writeBinaryRemoteFile(projectId, remotePath, base64Data) {
+  const { sftp } = await getConnection(projectId);
+  return new Promise((resolve, reject) => {
+    const buffer = Buffer.from(base64Data, 'base64');
+    const stream = sftp.createWriteStream(remotePath);
+    stream.on('close', () => resolve({ success: true }));
+    stream.on('error', (err) => reject(err));
+    stream.end(buffer);
+  });
+}
+
 module.exports = {
   getHomeDir,
   listRemoteFiles,
   readRemoteFile,
   readRemoteBinary,
   writeRemoteFile,
+  writeBinaryRemoteFile,
   disconnect,
   disconnectAll,
   testConnection,
