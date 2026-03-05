@@ -309,6 +309,16 @@ async function browseRemoteDirs(sshConfig, remotePath) {
   }
 }
 
+async function moveRemoteFile(projectId, srcPath, destPath) {
+  const { sftp } = await getConnection(projectId);
+  return new Promise((resolve, reject) => {
+    sftp.rename(srcPath, destPath, (err) => {
+      if (err) reject(err);
+      else resolve({ success: true });
+    });
+  });
+}
+
 async function writeBinaryRemoteFile(projectId, remotePath, base64Data) {
   const { sftp } = await getConnection(projectId);
   return new Promise((resolve, reject) => {
@@ -326,6 +336,7 @@ module.exports = {
   readRemoteFile,
   readRemoteBinary,
   writeRemoteFile,
+  moveRemoteFile,
   writeBinaryRemoteFile,
   disconnect,
   disconnectAll,

@@ -621,7 +621,7 @@ ipcMain.handle('watcher:stop', (_, projectId) => {
   return { success: true };
 });
 
-// --- IPC: File Copy ---
+// --- IPC: File Copy & Move ---
 
 ipcMain.handle('files:copyTo', async (_, srcPath, destPath) => {
   try {
@@ -636,7 +636,28 @@ ipcMain.handle('files:copyTo', async (_, srcPath, destPath) => {
   }
 });
 
+ipcMain.handle('files:move', async (_, srcPath, destPath) => {
+  try {
+    const destDir = path.dirname(destPath);
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+    fs.renameSync(srcPath, destPath);
+    return { success: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
 // --- IPC: Remote Binary Upload ---
+
+ipcMain.handle('remote:moveFile', async (_, projectId, srcPath, destPath) => {
+  try {
+    return await remoteFileManager.moveRemoteFile(projectId, srcPath, destPath);
+  } catch (e) {
+    return { error: e.message };
+  }
+});
 
 ipcMain.handle('remote:uploadBinary', async (_, projectId, remotePath, base64Data) => {
   try {

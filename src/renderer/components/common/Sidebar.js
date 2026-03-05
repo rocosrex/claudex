@@ -51,6 +51,8 @@ export class Sidebar {
     this.expandedProjects = new Set();
     this.expandedFolders = new Set();
     this.filesCache = new Map();
+    this.draggedProjectId = null;
+    this.draggedTreeItem = null; // { absolutePath, name, projectId, remote }
   }
 
   render() {
@@ -358,6 +360,86 @@ export class Sidebar {
         });
       }
 
+      // Drag-to-reorder projects
+      item.setAttribute('draggable', 'true');
+      item.addEventListener('dragstart', (e) => {
+        this.draggedProjectId = p.id;
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', p.id);
+      });
+      item.addEventListener('dragend', () => {
+        this.draggedProjectId = null;
+        item.classList.remove('dragging');
+        this._clearDropIndicators(listEl);
+      });
+      item.addEventListener('dragover', (e) => {
+        // Project reorder (internal drag)
+        if (this.draggedProjectId && this.draggedProjectId !== p.id) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          this._clearDropIndicators(listEl);
+          const rect = item.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          item.classList.add(e.clientY < midY ? 'drop-above' : 'drop-below');
+          return;
+        }
+        // Tree item move to project root
+        if (this.draggedTreeItem && this.draggedTreeItem.projectId === p.id && (p.path || p.ssh_host)) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'move';
+          item.classList.add('drag-over');
+          return;
+        }
+        // Finder file drop onto project root
+        if (!this.draggedProjectId && !this.draggedTreeItem && (p.path || p.ssh_host)) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'copy';
+          item.classList.add('drag-over');
+        }
+      });
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drop-above', 'drop-below', 'drag-over');
+      });
+      item.addEventListener('drop', async (e) => {
+        // Project reorder
+        if (this.draggedProjectId && this.draggedProjectId !== p.id) {
+          const position = item.classList.contains('drop-above') ? 'above' : 'below';
+          this._clearDropIndicators(listEl);
+          item.classList.remove('drag-over');
+          e.preventDefault();
+          e.stopPropagation();
+          await this.reorderProject(this.draggedProjectId, p.id, activeProjects, position);
+          this.draggedProjectId = null;
+          return;
+        }
+        // Tree item move to project root
+        if (this.draggedTreeItem && this.draggedTreeItem.projectId === p.id) {
+          item.classList.remove('drag-over');
+          const isRemote = !!p.ssh_host;
+          const rootPath = isRemote ? (p.ssh_remote_path || '/') : p.path;
+          if (!rootPath) return;
+          e.preventDefault();
+          e.stopPropagation();
+          await this._handleTreeItemMove(this.draggedTreeItem, rootPath);
+          this.draggedTreeItem = null;
+          return;
+        }
+        // Finder file drop onto project root
+        item.classList.remove('drag-over');
+        if (this.draggedProjectId || this.draggedTreeItem) return;
+        const droppedFiles = e.dataTransfer.files;
+        if (!droppedFiles || droppedFiles.length === 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const isRemote = !!p.ssh_host;
+        const rootPath = isRemote ? (p.ssh_remote_path || '/') : p.path;
+        if (!rootPath) return;
+        await this._handleFileDrop(droppedFiles, rootPath, p.id, isRemote);
+      });
+
       wrapper.appendChild(item);
 
       // Render expanded file tree if cached
@@ -369,6 +451,116 @@ export class Sidebar {
 
       listEl.appendChild(wrapper);
     });
+  }
+
+  async _handleTreeItemMove(draggedItem, destFolderPath) {
+    const { absolutePath, name, projectId, remote } = draggedItem;
+    const sep = remote ? '/' : '/';
+    const destPath = destFolderPath + sep + name;
+
+    // Prevent moving into itself
+    if (destFolderPath.startsWith(absolutePath + sep)) {
+      Toast.show('Cannot move a folder into itself', 'error');
+      return;
+    }
+    if (absolutePath === destPath) return;
+
+    try {
+      let result;
+      if (remote) {
+        result = await window.api.remote.moveFile(projectId, absolutePath, destPath);
+      } else {
+        result = await window.api.files.move(absolutePath, destPath);
+      }
+      if (result && result.error) {
+        Toast.show(`Move failed: ${result.error}`, 'error');
+      } else {
+        Toast.show(`Moved ${name}`, 'success');
+        this.refreshProjectTree(projectId);
+      }
+    } catch (err) {
+      Toast.show(`Move failed: ${err.message}`, 'error');
+    }
+  }
+
+  async _handleFileDrop(files, destDir, projectId, remote) {
+    for (const file of files) {
+      const fileName = file.name;
+      if (remote) {
+        try {
+          const base64 = await this._readFileAsBase64(file);
+          const remoteDest = destDir + '/' + fileName;
+          const result = await window.api.remote.uploadBinary(projectId, remoteDest, base64);
+          if (result && result.error) {
+            Toast.show(`Upload failed: ${result.error}`, 'error');
+          } else {
+            Toast.show(`Uploaded ${fileName}`, 'success');
+            this.refreshProjectTree(projectId);
+          }
+        } catch (err) {
+          Toast.show(`Upload failed: ${err.message}`, 'error');
+        }
+      } else {
+        try {
+          const srcPath = window.api.files.getFilePath(file);
+          if (!srcPath) {
+            Toast.show(`Copy failed: cannot access file path`, 'error');
+            continue;
+          }
+          const destPath = destDir + '/' + fileName;
+          const result = await window.api.files.copyTo(srcPath, destPath);
+          if (result && result.error) {
+            Toast.show(`Copy failed: ${result.error}`, 'error');
+          } else {
+            Toast.show(`Copied ${fileName}`, 'success');
+            this.refreshProjectTree(projectId);
+          }
+        } catch (err) {
+          Toast.show(`Copy failed: ${err.message}`, 'error');
+        }
+      }
+    }
+  }
+
+  _readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  _clearDropIndicators(container) {
+    container.querySelectorAll('.drop-above, .drop-below').forEach(el => {
+      el.classList.remove('drop-above', 'drop-below');
+    });
+  }
+
+  async reorderProject(draggedId, targetId, projectList, position = 'above') {
+    const ids = projectList.map(p => p.id);
+    const fromIdx = ids.indexOf(draggedId);
+    let toIdx = ids.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    // Remove dragged item first
+    ids.splice(fromIdx, 1);
+    // Recalculate target index after removal
+    toIdx = ids.indexOf(targetId);
+    // Insert above or below the target
+    const insertIdx = position === 'below' ? toIdx + 1 : toIdx;
+    ids.splice(insertIdx, 0, draggedId);
+
+    // Update sort_order for all projects
+    try {
+      await Promise.all(ids.map((id, i) =>
+        window.api.projects.update(id, { sort_order: i })
+      ));
+      const projects = await window.api.projects.list();
+      store.setState({ projects });
+    } catch (e) {
+      console.error('Failed to reorder projects:', e);
+    }
   }
 
   async toggleProjectTree(projectId, projectPath, wrapper, project) {
@@ -498,8 +690,33 @@ export class Sidebar {
           });
         }
 
-        // Drag & drop: accept files from Finder
+        // Make folder draggable within tree
+        folderItem.setAttribute('draggable', 'true');
+        folderItem.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+          this.draggedTreeItem = { absolutePath: f.absolutePath, name: f.name, projectId, remote };
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('application/x-tree-item', f.absolutePath);
+          folderItem.classList.add('dragging');
+        });
+        folderItem.addEventListener('dragend', () => {
+          this.draggedTreeItem = null;
+          folderItem.classList.remove('dragging');
+        });
+
+        // Drag & drop: accept tree items or Finder files
         folderItem.addEventListener('dragover', (e) => {
+          if (this.draggedProjectId) return;
+          // Internal tree move
+          if (this.draggedTreeItem) {
+            if (this.draggedTreeItem.absolutePath === f.absolutePath) return; // can't drop on self
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'move';
+            folderItem.classList.add('drag-over');
+            return;
+          }
+          // External file drop from Finder
           e.preventDefault();
           e.stopPropagation();
           e.dataTransfer.dropEffect = 'copy';
@@ -510,49 +727,24 @@ export class Sidebar {
           folderItem.classList.remove('drag-over');
         });
         folderItem.addEventListener('drop', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
           folderItem.classList.remove('drag-over');
+          if (this.draggedProjectId) return;
+
+          // Internal tree item move
+          if (this.draggedTreeItem && this.draggedTreeItem.absolutePath !== f.absolutePath) {
+            e.preventDefault();
+            e.stopPropagation();
+            await this._handleTreeItemMove(this.draggedTreeItem, f.absolutePath);
+            this.draggedTreeItem = null;
+            return;
+          }
+
+          // External file drop from Finder
           const droppedFiles = e.dataTransfer.files;
           if (!droppedFiles || droppedFiles.length === 0) return;
-
-          for (const file of droppedFiles) {
-            const fileName = file.name;
-            if (remote) {
-              // SSH: read file as base64 then upload via SFTP
-              try {
-                const reader = new FileReader();
-                reader.onload = async () => {
-                  const base64 = reader.result.split(',')[1];
-                  const remoteDest = f.absolutePath + '/' + fileName;
-                  const result = await window.api.remote.uploadBinary(projectId, remoteDest, base64);
-                  if (result && result.error) {
-                    Toast.show(`Upload failed: ${result.error}`, 'error');
-                  } else {
-                    Toast.show(`Uploaded ${fileName}`, 'success');
-                    this.refreshProjectTree(projectId);
-                  }
-                };
-                reader.readAsDataURL(file);
-              } catch (err) {
-                Toast.show(`Upload failed: ${err.message}`, 'error');
-              }
-            } else {
-              // Local: copy file
-              try {
-                const srcPath = file.path;
-                const destPath = f.absolutePath + '/' + fileName;
-                const result = await window.api.files.copyTo(srcPath, destPath);
-                if (result && result.error) {
-                  Toast.show(`Copy failed: ${result.error}`, 'error');
-                } else {
-                  Toast.show(`Copied ${fileName}`, 'success');
-                }
-              } catch (err) {
-                Toast.show(`Copy failed: ${err.message}`, 'error');
-              }
-            }
-          }
+          e.preventDefault();
+          e.stopPropagation();
+          await this._handleFileDrop(droppedFiles, f.absolutePath, projectId, remote);
         });
 
         tree.appendChild(folderItem);
@@ -594,6 +786,20 @@ export class Sidebar {
             window.api.shell.revealInFinder(f.absolutePath);
           });
         }
+
+        // Make file draggable within tree
+        item.setAttribute('draggable', 'true');
+        item.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+          this.draggedTreeItem = { absolutePath: f.absolutePath, name: f.name, projectId, remote };
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('application/x-tree-item', f.absolutePath);
+          item.classList.add('dragging');
+        });
+        item.addEventListener('dragend', () => {
+          this.draggedTreeItem = null;
+          item.classList.remove('dragging');
+        });
 
         tree.appendChild(item);
       }

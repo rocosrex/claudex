@@ -1,6 +1,6 @@
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   // Projects
@@ -75,6 +75,8 @@ contextBridge.exposeInMainWorld('api', {
     write: (filePath, content) => ipcRenderer.invoke('files:write', filePath, content),
     create: (dirPath, fileName) => ipcRenderer.invoke('files:create', dirPath, fileName),
     copyTo: (src, dest) => ipcRenderer.invoke('files:copyTo', src, dest),
+    move: (src, dest) => ipcRenderer.invoke('files:move', src, dest),
+    getFilePath: (file) => webUtils.getPathForFile(file),
   },
   // File Watcher
   watcher: {
@@ -88,6 +90,7 @@ contextBridge.exposeInMainWorld('api', {
     readFile: (projectId, remotePath) => ipcRenderer.invoke('remote:readFile', projectId, remotePath),
     readBinary: (projectId, remotePath) => ipcRenderer.invoke('remote:readBinary', projectId, remotePath),
     writeFile: (projectId, remotePath, content) => ipcRenderer.invoke('remote:writeFile', projectId, remotePath, content),
+    moveFile: (projectId, src, dest) => ipcRenderer.invoke('remote:moveFile', projectId, src, dest),
     uploadBinary: (projectId, remotePath, base64) => ipcRenderer.invoke('remote:uploadBinary', projectId, remotePath, base64),
     homeDir: (projectId) => ipcRenderer.invoke('remote:homeDir', projectId),
     disconnect: (projectId) => ipcRenderer.invoke('remote:disconnect', projectId),

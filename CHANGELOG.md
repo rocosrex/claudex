@@ -4,6 +4,17 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.3] - 2026-03-05
+
+### Added
+- Project drag & drop reorder in sidebar with insertion line indicator
+- File tree internal drag & drop — move files/folders between directories
+- File move support for both local (fs.rename) and SSH (sftp.rename)
+- Finder file drop onto project root node
+
+### Fixed
+- Finder file drag & drop now works correctly using webUtils.getPathForFile
+
 ## [1.10.2] - 2026-03-05
 
 ### Added
