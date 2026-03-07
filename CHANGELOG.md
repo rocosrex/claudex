@@ -4,6 +4,20 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.4] - 2026-03-07
+
+### Added
+- Right-click context menu on projects, folders, and files in sidebar
+  - Create Markdown File, New File, New Folder on projects and folders
+  - Rename and Delete on files and folders
+- Inline rename with Enter key for selected files/folders (Finder-style)
+- `files:createDir` and `files:delete` backend IPC handlers
+- Modal-based file/folder name input (replaces unsupported `window.prompt`)
+
+### Changed
+- Translated kanban board UI from Korean to English (In Progress, Review, Done, etc.)
+- Made project path input editable in ProjectForm
+
 ## [1.10.3] - 2026-03-05
 
 ### Added
