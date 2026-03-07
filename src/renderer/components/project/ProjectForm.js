@@ -46,7 +46,7 @@ export class ProjectForm {
       <div>
         <label class="block text-sm text-slate-400 mb-1 path-label">Path</label>
         <div class="flex gap-2">
-          <input type="text" name="path" class="input flex-1" placeholder="/Users/..." value="${p.ssh_host ? (p.ssh_remote_path || '') : (p.path || '')}" readonly />
+          <input type="text" name="path" class="input flex-1" placeholder="/Users/..." value="${p.ssh_host ? (p.ssh_remote_path || '') : (p.path || '')}" />
           <button class="btn-select-folder btn-secondary whitespace-nowrap">Browse</button>
         </div>
         <p class="path-hint text-xs text-slate-500 mt-1" style="display:none;"></p>

@@ -4,10 +4,10 @@ import { Toast } from '../common/Toast.js';
 import { makeDraggable, makeDropZone } from '../../utils/drag-drop.js';
 
 const STAGES = [
-  { id: 'backlog', label: 'Backlog', icon: '\uD83D\uDCCB', color: '#94a3b8' },
-  { id: 'in_progress', label: '\uC9C4\uD589 \uC911', icon: '\uD83D\uDD28', color: '#3b82f6' },
-  { id: 'review', label: '\uB9AC\uBDF0', icon: '\uD83D\uDC40', color: '#eab308' },
-  { id: 'done', label: '\uC644\uB8CC', icon: '\u2705', color: '#22c55e' },
+  { id: 'backlog', label: 'Backlog', icon: '📋', color: '#94a3b8' },
+  { id: 'in_progress', label: 'In Progress', icon: '🔨', color: '#3b82f6' },
+  { id: 'review', label: 'Review', icon: '👀', color: '#eab308' },
+  { id: 'done', label: 'Done', icon: '✅', color: '#22c55e' },
 ];
 
 export class KanbanBoard {
@@ -24,11 +24,11 @@ export class KanbanBoard {
     el.className = 'flex flex-col h-full';
     el.innerHTML = `
       <div class="flex items-center justify-between px-6 py-4 border-b" style="border-color: var(--color-border);">
-        <h1 class="text-lg font-bold text-slate-100">\uCE78\uBC18 \uBCF4\uB4DC</h1>
+        <h1 class="text-lg font-bold text-slate-100">Kanban Board</h1>
         <div class="flex items-center gap-2">
           <label class="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
             <input type="checkbox" class="filter-active-check" checked />
-            \uD65C\uC131 \uD504\uB85C\uC81D\uD2B8\uB9CC
+            Active projects only
           </label>
         </div>
       </div>
@@ -67,7 +67,7 @@ export class KanbanBoard {
       this.renderBoard();
     } catch (e) {
       console.error('Kanban load error:', e);
-      Toast.show('\uCE78\uBC18 \uBCF4\uB4DC \uB370\uC774\uD130 \uB85C\uB4DC \uC2E4\uD328', 'error');
+      Toast.show('Failed to load kanban data', 'error');
     }
   }
 
@@ -108,7 +108,7 @@ export class KanbanBoard {
       if (stageProjects.length === 0) {
         body.innerHTML = `
           <div class="text-center py-8 text-sm text-slate-500">
-            \uD504\uB85C\uC81D\uD2B8\uB97C \uC5EC\uAE30\uB85C \uB4DC\uB798\uADF8\uD558\uC138\uC694
+            Drag projects here
           </div>
         `;
       } else {
@@ -179,7 +179,7 @@ export class KanbanBoard {
       Toast.show(`"${project.name}" \u2192 ${stageLabel}`, 'success');
     } catch (e) {
       console.error('Kanban update error:', e);
-      Toast.show('\uCE78\uBC18 \uC774\uB3D9 \uC2E4\uD328', 'error');
+      Toast.show('Failed to move project', 'error');
     }
   }
 }

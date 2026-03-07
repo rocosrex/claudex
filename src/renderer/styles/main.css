@@ -1281,6 +1281,33 @@ select.input {
   color: var(--color-text-primary);
 }
 
+.sidebar-context-menu-separator {
+  height: 1px;
+  margin: 0.25rem 0.5rem;
+  background: var(--color-border);
+}
+
+/* ===== Tree Item Selection & Rename ===== */
+.tree-item-selected {
+  background: rgba(99, 102, 241, 0.15) !important;
+  outline: 1px solid rgba(99, 102, 241, 0.3);
+  outline-offset: -1px;
+}
+
+.rename-input {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-accent);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  width: 100%;
+  max-width: 160px;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
 /* ===== Sidebar Docs Tree ===== */
 .sidebar-docs-tree {
   padding: 0.125rem 0;

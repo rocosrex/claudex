@@ -53,6 +53,7 @@ export class Sidebar {
     this.filesCache = new Map();
     this.draggedProjectId = null;
     this.draggedTreeItem = null; // { absolutePath, name, projectId, remote }
+    this.selectedTreeItem = null; // { element, absolutePath, name, projectId, remote, isDirectory }
   }
 
   render() {
@@ -156,8 +157,26 @@ export class Sidebar {
       store.setState({ searchQuery: e.target.value });
     });
 
-    // Close context menu on click outside
-    document.addEventListener('click', () => this.closeContextMenu());
+    // Close context menu on click outside and deselect tree items
+    document.addEventListener('click', (e) => {
+      this.closeContextMenu();
+      // Deselect tree item if clicking outside the tree
+      if (this.selectedTreeItem && !e.target.closest('.sidebar-docs-tree') && !e.target.closest('.sidebar-project-item')) {
+        this._deselectTreeItem();
+      }
+    });
+
+    // Enter key to rename selected tree item
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && this.selectedTreeItem
+          && !e.target.closest('.rename-input')
+          && !e.target.closest('input')
+          && !e.target.closest('textarea')
+          && !e.target.closest('[contenteditable]')) {
+        e.preventDefault();
+        this._startInlineRename(this.selectedTreeItem);
+      }
+    });
 
     // File watcher: auto-refresh tree on file system changes
     window.api.watcher.onChange((projectId, data) => {
@@ -199,7 +218,7 @@ export class Sidebar {
     this.renderProjects();
   }
 
-  showContextMenu(e, folderPath, project) {
+  showContextMenu(e, folderPath, project, fileInfo = null) {
     e.preventDefault();
     this.closeContextMenu();
 
@@ -208,39 +227,97 @@ export class Sidebar {
     menu.style.left = `${e.clientX}px`;
     menu.style.top = `${e.clientY}px`;
 
-    if (folderPath) {
-      const revealItem = document.createElement('div');
-      revealItem.className = 'sidebar-context-menu-item';
-      revealItem.textContent = '📂 Reveal in Finder';
-      revealItem.addEventListener('click', (ev) => {
+    const addItem = (icon, label, onClick, color = null) => {
+      const item = document.createElement('div');
+      item.className = 'sidebar-context-menu-item';
+      if (color) item.style.color = color;
+      item.textContent = `${icon} ${label}`;
+      item.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        window.api.shell.revealInFinder(folderPath);
         this.closeContextMenu();
+        onClick();
       });
-      menu.appendChild(revealItem);
-    }
+      menu.appendChild(item);
+    };
 
-    if (project) {
-      const refreshItem = document.createElement('div');
-      refreshItem.className = 'sidebar-context-menu-item';
-      refreshItem.textContent = '🔄 Refresh';
-      refreshItem.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        this.closeContextMenu();
+    const addSeparator = () => {
+      const sep = document.createElement('div');
+      sep.className = 'sidebar-context-menu-separator';
+      menu.appendChild(sep);
+    };
+
+    // File-specific context menu
+    if (fileInfo && !fileInfo.isDirectory) {
+      addItem('✏️', 'Rename', () => {
+        this._startInlineRename(fileInfo);
+      });
+      addSeparator();
+      if (folderPath) {
+        addItem('📂', 'Reveal in Finder', () => {
+          window.api.shell.revealInFinder(folderPath);
+        });
+        addSeparator();
+      }
+      addItem('🗑', 'Delete', () => {
+        this._confirmDeleteFile(fileInfo);
+      }, '#f87171');
+    }
+    // Folder context menu (from tree)
+    else if (fileInfo && fileInfo.isDirectory) {
+      addItem('📝', 'New Markdown File', () => {
+        this._createNewFile(fileInfo.absolutePath, fileInfo.projectId, '.md');
+      });
+      addItem('📄', 'New File', () => {
+        this._createNewFile(fileInfo.absolutePath, fileInfo.projectId);
+      });
+      addItem('📁', 'New Folder', () => {
+        this._createNewFolder(fileInfo.absolutePath, fileInfo.projectId);
+      });
+      addSeparator();
+      addItem('✏️', 'Rename', () => {
+        this._startInlineRename(fileInfo);
+      });
+      addSeparator();
+      if (folderPath) {
+        addItem('📂', 'Reveal in Finder', () => {
+          window.api.shell.revealInFinder(folderPath);
+        });
+      }
+      if (project) {
+        addItem('🔄', 'Refresh', () => {
+          this.refreshProjectTree(project.id);
+        });
+      }
+      addSeparator();
+      addItem('🗑', 'Delete', () => {
+        this._confirmDeleteFile(fileInfo);
+      }, '#f87171');
+    }
+    // Project-level context menu
+    else if (project) {
+      const projectPath = project.path;
+      if (projectPath && !project.ssh_host) {
+        addItem('📝', 'New Markdown File', () => {
+          this._createNewFile(projectPath, project.id, '.md');
+        });
+        addItem('📄', 'New File', () => {
+          this._createNewFile(projectPath, project.id);
+        });
+        addItem('📁', 'New Folder', () => {
+          this._createNewFolder(projectPath, project.id);
+        });
+        addSeparator();
+        addItem('📂', 'Reveal in Finder', () => {
+          window.api.shell.revealInFinder(projectPath);
+        });
+      }
+      addItem('🔄', 'Refresh', () => {
         this.refreshProjectTree(project.id);
       });
-      menu.appendChild(refreshItem);
-
-      const deleteItem = document.createElement('div');
-      deleteItem.className = 'sidebar-context-menu-item';
-      deleteItem.style.color = '#f87171';
-      deleteItem.textContent = '🗑 Delete Project';
-      deleteItem.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        this.closeContextMenu();
+      addSeparator();
+      addItem('🗑', 'Delete Project', () => {
         this.confirmDeleteProject(project);
-      });
-      menu.appendChild(deleteItem);
+      }, '#f87171');
     }
 
     document.body.appendChild(menu);
@@ -252,6 +329,237 @@ export class Sidebar {
       if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 8}px`;
       if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 8}px`;
     });
+  }
+
+  _showInputModal(title, label, defaultValue, onSubmit) {
+    const content = document.createElement('div');
+    content.innerHTML = `
+      <label class="block text-sm text-slate-300 mb-2">${label}</label>
+      <input type="text" class="modal-input w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 text-sm focus:outline-none focus:border-indigo-500" value="${defaultValue}" />
+    `;
+    const input = content.querySelector('input');
+
+    const modal = new Modal({
+      title,
+      content,
+      confirmText: 'Create',
+      onConfirm: () => {
+        const value = input.value.trim();
+        if (value) {
+          modal.close();
+          onSubmit(value);
+        }
+      },
+    });
+    modal.open();
+
+    // Focus and select filename (without extension)
+    requestAnimationFrame(() => {
+      input.focus();
+      const dotIdx = defaultValue.lastIndexOf('.');
+      input.setSelectionRange(0, dotIdx > 0 ? dotIdx : defaultValue.length);
+    });
+
+    // Enter to confirm
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const value = input.value.trim();
+        if (value) {
+          modal.close();
+          onSubmit(value);
+        }
+      }
+    });
+  }
+
+  _createNewFile(parentPath, projectId, extension = '') {
+    const defaultName = extension === '.md' ? 'untitled.md' : 'untitled';
+    const label = extension === '.md' ? 'Markdown file name:' : 'File name:';
+
+    this._showInputModal('New File', label, defaultName, async (name) => {
+      let fileName = name;
+      if (extension === '.md' && !fileName.endsWith('.md')) {
+        fileName += '.md';
+      }
+
+      try {
+        const result = await window.api.files.create(parentPath, fileName);
+        if (result && result.error) {
+          Toast.show(`Failed to create file: ${result.error}`, 'error');
+        } else {
+          Toast.show(`Created ${fileName}`, 'success');
+          await this.refreshProjectTree(projectId);
+          // Open the new file in editor if it's a text file
+          if (isTextFile(fileName)) {
+            const { projects } = store.getState();
+            const project = projects.find(p => p.id === projectId);
+            if (this.onNavigate && project) {
+              this.onNavigate('docs-editor', {
+                projectId,
+                filePath: result.filePath,
+                projectPath: project.path,
+                remote: false,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        Toast.show(`Failed to create file: ${err.message}`, 'error');
+      }
+    });
+  }
+
+  _createNewFolder(parentPath, projectId) {
+    this._showInputModal('New Folder', 'Folder name:', 'new-folder', async (name) => {
+      try {
+        const result = await window.api.files.createDir(parentPath, name);
+        if (result && result.error) {
+          Toast.show(`Failed to create folder: ${result.error}`, 'error');
+        } else {
+          Toast.show(`Created folder ${name}`, 'success');
+          await this.refreshProjectTree(projectId);
+        }
+      } catch (err) {
+        Toast.show(`Failed to create folder: ${err.message}`, 'error');
+      }
+    });
+  }
+
+  _confirmDeleteFile(fileInfo) {
+    const typeLabel = fileInfo.isDirectory ? 'folder' : 'file';
+    const modal = new Modal({
+      title: `Delete ${typeLabel}`,
+      content: `<p class="text-slate-300">Are you sure you want to delete "<strong>${fileInfo.name}</strong>"?</p>${fileInfo.isDirectory ? '<p class="text-sm text-slate-500 mt-2">All contents will be permanently deleted.</p>' : ''}`,
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        try {
+          const result = await window.api.files.delete(fileInfo.absolutePath);
+          if (result && result.error) {
+            Toast.show(`Failed to delete: ${result.error}`, 'error');
+          } else {
+            Toast.show(`Deleted ${fileInfo.name}`, 'info');
+            this.refreshProjectTree(fileInfo.projectId);
+          }
+          modal.close();
+        } catch (err) {
+          Toast.show(`Failed to delete: ${err.message}`, 'error');
+        }
+      },
+    });
+    modal.open();
+    const confirmBtn = modal.overlay.querySelector('.modal-confirm-btn');
+    if (confirmBtn) {
+      confirmBtn.className = 'text-sm px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all';
+    }
+  }
+
+  _startInlineRename(fileInfo) {
+    const el = fileInfo.element;
+    if (!el) return;
+    this._enterRenameMode(el, fileInfo);
+  }
+
+  _enterRenameMode(el, fileInfo) {
+    // Prevent double-rename
+    if (el.querySelector('.rename-input')) return;
+
+    const nameSpan = fileInfo.isDirectory
+      ? el.querySelector('.folder-name')
+      : el;
+
+    if (!nameSpan) return;
+
+    const oldName = fileInfo.name;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rename-input';
+    input.value = oldName;
+
+    // For files, select name without extension
+    const dotIdx = oldName.lastIndexOf('.');
+    const selectEnd = (!fileInfo.isDirectory && dotIdx > 0) ? dotIdx : oldName.length;
+
+    if (fileInfo.isDirectory) {
+      // Replace just the folder name span content
+      nameSpan.textContent = '';
+      nameSpan.appendChild(input);
+    } else {
+      // Replace the entire file item content with icon + input
+      const icon = el.querySelector('.docs-file-icon');
+      const iconText = icon ? icon.textContent : '📄';
+      el.textContent = '';
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'docs-file-icon';
+      iconSpan.textContent = iconText;
+      el.appendChild(iconSpan);
+      el.appendChild(document.createTextNode(' '));
+      el.appendChild(input);
+    }
+
+    input.focus();
+    input.setSelectionRange(0, selectEnd);
+
+    const commitRename = async () => {
+      const newName = input.value.trim();
+      if (!newName || newName === oldName) {
+        // Revert
+        this.refreshProjectTree(fileInfo.projectId);
+        return;
+      }
+
+      const parentPath = fileInfo.absolutePath.substring(0, fileInfo.absolutePath.lastIndexOf('/'));
+      const newPath = parentPath + '/' + newName;
+
+      try {
+        const result = await window.api.files.move(fileInfo.absolutePath, newPath);
+        if (result && result.error) {
+          Toast.show(`Rename failed: ${result.error}`, 'error');
+        } else {
+          Toast.show(`Renamed to ${newName}`, 'success');
+        }
+        this.refreshProjectTree(fileInfo.projectId);
+      } catch (err) {
+        Toast.show(`Rename failed: ${err.message}`, 'error');
+        this.refreshProjectTree(fileInfo.projectId);
+      }
+    };
+
+    let committed = false;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        committed = true;
+        commitRename();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        committed = true;
+        this.refreshProjectTree(fileInfo.projectId);
+      }
+    });
+    input.addEventListener('blur', () => {
+      if (!committed) {
+        committed = true;
+        commitRename();
+      }
+    });
+    // Prevent click from propagating (opening the file)
+    input.addEventListener('click', (e) => e.stopPropagation());
+  }
+
+  _selectTreeItem(element, fileInfo) {
+    this._deselectTreeItem();
+    element.classList.add('tree-item-selected');
+    this.selectedTreeItem = { ...fileInfo, element };
+  }
+
+  _deselectTreeItem() {
+    if (this.selectedTreeItem && this.selectedTreeItem.element) {
+      this.selectedTreeItem.element.classList.remove('tree-item-selected');
+    }
+    this.selectedTreeItem = null;
   }
 
   closeContextMenu() {
@@ -681,14 +989,19 @@ export class Sidebar {
           }
         });
 
-        // Right-click → Reveal in Finder (local only) + project context
-        if (!remote) {
-          folderItem.addEventListener('contextmenu', (e) => {
-            const { projects } = store.getState();
-            const proj = projects.find(p => p.id === projectId);
-            this.showContextMenu(e, f.absolutePath, proj);
-          });
-        }
+        // Click also selects this folder
+        folderItem.addEventListener('click', () => {
+          this._selectTreeItem(folderItem, { absolutePath: f.absolutePath, name: f.name, projectId, remote, isDirectory: true });
+        }, true);
+
+        // Right-click → context menu with create/rename/delete options
+        folderItem.addEventListener('contextmenu', (e) => {
+          const { projects } = store.getState();
+          const proj = projects.find(p => p.id === projectId);
+          const fileInfo = { absolutePath: f.absolutePath, name: f.name, projectId, remote, isDirectory: true, element: folderItem };
+          this._selectTreeItem(folderItem, fileInfo);
+          this.showContextMenu(e, remote ? null : f.absolutePath, proj, fileInfo);
+        });
 
         // Make folder draggable within tree
         folderItem.setAttribute('draggable', 'true');
@@ -771,21 +1084,37 @@ export class Sidebar {
 
         if (isText) {
           item.addEventListener('click', () => {
+            this._selectTreeItem(item, { absolutePath: f.absolutePath, name: f.name, projectId, remote, isDirectory: false });
             if (this.onNavigate) {
               this.onNavigate('docs-editor', { projectId, filePath: f.absolutePath, projectPath, remote });
             }
           });
         } else if (isPdf) {
           item.addEventListener('click', () => {
+            this._selectTreeItem(item, { absolutePath: f.absolutePath, name: f.name, projectId, remote, isDirectory: false });
             if (this.onNavigate) {
               this.onNavigate('pdf-viewer', { projectId, filePath: f.absolutePath, projectPath, remote });
             }
           });
         } else if (!remote) {
           item.addEventListener('click', () => {
+            this._selectTreeItem(item, { absolutePath: f.absolutePath, name: f.name, projectId, remote, isDirectory: false });
             window.api.shell.revealInFinder(f.absolutePath);
           });
+        } else {
+          item.addEventListener('click', () => {
+            this._selectTreeItem(item, { absolutePath: f.absolutePath, name: f.name, projectId, remote, isDirectory: false });
+          });
         }
+
+        // Right-click → context menu for files
+        item.addEventListener('contextmenu', (e) => {
+          const { projects } = store.getState();
+          const proj = projects.find(p => p.id === projectId);
+          const fileInfo = { absolutePath: f.absolutePath, name: f.name, projectId, remote, isDirectory: false, element: item };
+          this._selectTreeItem(item, fileInfo);
+          this.showContextMenu(e, remote ? null : f.absolutePath, proj, fileInfo);
+        });
 
         // Make file draggable within tree
         item.setAttribute('draggable', 'true');

@@ -335,6 +335,36 @@ ipcMain.handle('files:create', (_, dirPath, fileName) => {
   }
 });
 
+ipcMain.handle('files:createDir', (_, parentPath, dirName) => {
+  try {
+    const dirPath = path.join(parentPath, dirName);
+    if (fs.existsSync(dirPath)) {
+      return { error: 'Folder already exists' };
+    }
+    fs.mkdirSync(dirPath, { recursive: true });
+    return { success: true, dirPath };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
+ipcMain.handle('files:delete', (_, targetPath) => {
+  try {
+    if (!fs.existsSync(targetPath)) {
+      return { error: 'Path does not exist' };
+    }
+    const stat = fs.statSync(targetPath);
+    if (stat.isDirectory()) {
+      fs.rmSync(targetPath, { recursive: true, force: true });
+    } else {
+      fs.unlinkSync(targetPath);
+    }
+    return { success: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
 // --- IPC: Terminal ---
 
 ipcMain.handle('terminal:create', (_, projectId, projectPath) => {

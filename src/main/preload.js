@@ -74,6 +74,8 @@ contextBridge.exposeInMainWorld('api', {
     readBinary: (filePath) => ipcRenderer.invoke('files:readBinary', filePath),
     write: (filePath, content) => ipcRenderer.invoke('files:write', filePath, content),
     create: (dirPath, fileName) => ipcRenderer.invoke('files:create', dirPath, fileName),
+    createDir: (parentPath, dirName) => ipcRenderer.invoke('files:createDir', parentPath, dirName),
+    delete: (targetPath) => ipcRenderer.invoke('files:delete', targetPath),
     copyTo: (src, dest) => ipcRenderer.invoke('files:copyTo', src, dest),
     move: (src, dest) => ipcRenderer.invoke('files:move', src, dest),
     getFilePath: (file) => webUtils.getPathForFile(file),
