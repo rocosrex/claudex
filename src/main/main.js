@@ -18,6 +18,7 @@ const RENDERER_CRASH_WINDOW_MS = 30_000;
 const RENDERER_CRASH_LIMIT = 3;
 let rendererCrashTimestamps = [];
 let rendererRecoveryShown = false;
+let lastRendererCrashDetails = null;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({
@@ -79,9 +80,16 @@ function rendererRecoveryHtml(reason, exitCode) {
 }
 
 function showRendererRecoveryPage(win, details) {
-  if (!win || win.isDestroyed() || rendererRecoveryShown) return;
+  if (!win || win.isDestroyed()) return;
+
   rendererRecoveryShown = true;
-  const html = rendererRecoveryHtml(details?.reason, details?.exitCode);
+  const recoveryDetails = details || lastRendererCrashDetails || { reason: 'recovery-mode' };
+  lastRendererCrashDetails = {
+    reason: recoveryDetails?.reason || 'recovery-mode',
+    exitCode: recoveryDetails?.exitCode,
+  };
+
+  const html = rendererRecoveryHtml(lastRendererCrashDetails.reason, lastRendererCrashDetails.exitCode);
   win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`).catch((err) => {
     console.error('[renderer-recovery] Failed to show recovery page:', err.message);
   });
@@ -191,7 +199,11 @@ function createWindow() {
   }
 
   attachWindowRecoveryHandlers(mainWindow);
-  mainWindow.loadFile(path.join(__dirname, '../../public/index.html'));
+  if (rendererRecoveryShown) {
+    showRendererRecoveryPage(mainWindow, lastRendererCrashDetails || { reason: 'recovery-mode' });
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../../public/index.html'));
+  }
 
   // if (process.env.NODE_ENV === 'development') {
   //   mainWindow.webContents.openDevTools();

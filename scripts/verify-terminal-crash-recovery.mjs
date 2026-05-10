@@ -25,5 +25,9 @@ contains(main, 'rendererRecoveryShown', 'main process must guard recovery page l
 contains(main, 'function escapeHtml', 'recovery page must escape dynamic details');
 contains(main, 'Content-Security-Policy', 'recovery page must include a CSP');
 contains(main, "default-src 'none'", 'recovery page CSP must deny default loads');
+contains(main, 'lastRendererCrashDetails', 'main process must store last recovery details');
+contains(main, 'if (rendererRecoveryShown)', 'createWindow must branch for recovery mode');
+contains(main, "reason: 'recovery-mode'", 'recreated recovery windows must have fallback recovery details');
+contains(main, 'showRendererRecoveryPage(mainWindow', 'createWindow must load recovery page during recovery mode');
 
 console.log('terminal crash recovery verification passed');
