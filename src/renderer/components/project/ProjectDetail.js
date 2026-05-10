@@ -12,6 +12,11 @@ export class ProjectDetail {
     this.container = null;
     this.activeTab = 'overview';
     this.onNavigate = null; // set by App
+    this._tabComponents = new Map();
+    this._tabRenderGenerations = new Map();
+    this._terminalPanel = null;
+    this._terminalEl = null;
+    this._destroyed = false;
   }
 
   render() {
@@ -29,16 +34,19 @@ export class ProjectDetail {
   }
 
   async loadProject() {
+    if (this._destroyed) return;
     try {
       const projects = store.getState().projects;
       this.project = projects.find(p => p.id === this.projectId);
 
       if (!this.project) {
         const allProjects = await window.api.projects.list();
+        if (this._destroyed) return;
         store.setState({ projects: allProjects });
         this.project = allProjects.find(p => p.id === this.projectId);
       }
 
+      if (this._destroyed) return;
       if (!this.project) {
         this.container.querySelector('.detail-header').innerHTML = `
           <div class="empty-state"><p class="text-slate-400">Project not found</p></div>
@@ -51,6 +59,7 @@ export class ProjectDetail {
       this.renderTabs();
       this.showTab(this.activeTab);
     } catch (e) {
+      if (this._destroyed) return;
       console.error('Failed to load project:', e);
       Toast.show('Failed to load project', 'error');
     }
@@ -162,7 +171,43 @@ export class ProjectDetail {
     });
   }
 
+  _destroyTabComponent(tabId) {
+    const component = this._tabComponents.get(tabId);
+    if (!component) return;
+    try {
+      component.destroy?.();
+    } catch (e) {
+      console.warn(`Failed to destroy ${tabId} tab component:`, e);
+    }
+    this._tabComponents.delete(tabId);
+  }
+
+  _destroyAllTabComponents() {
+    for (const tabId of this._tabComponents.keys()) {
+      this._destroyTabComponent(tabId);
+    }
+  }
+
+  _nextTabRenderGeneration(tabId) {
+    const nextGeneration = (this._tabRenderGenerations.get(tabId) || 0) + 1;
+    this._tabRenderGenerations.set(tabId, nextGeneration);
+    return nextGeneration;
+  }
+
+  _isCurrentTabRender(tabId, renderGeneration, container) {
+    return !this._destroyed &&
+      this.activeTab === tabId &&
+      this._tabRenderGenerations.get(tabId) === renderGeneration &&
+      container.isConnected;
+  }
+
   showTab(tabId) {
+    if (this._destroyed || !this.container) return;
+    const previousTab = this.activeTab;
+    if (previousTab !== tabId && previousTab !== 'terminal') {
+      this._destroyTabComponent(previousTab);
+    }
+
     this.activeTab = tabId;
     const tabNav = this.container.querySelector('.tab-nav');
     tabNav.querySelectorAll('.tab-btn').forEach((btn, i) => {
@@ -185,34 +230,47 @@ export class ProjectDetail {
     }
 
     content.innerHTML = '';
+    const renderGeneration = this._nextTabRenderGeneration(tabId);
 
     switch (tabId) {
       case 'overview':
-        this.renderOverview(content);
+        this.renderOverview(content, renderGeneration);
         break;
       case 'todos':
-        this.renderTabPlaceholder(content, 'todos', 'TodoList');
+        this.renderTabPlaceholder(content, 'todos', 'TodoList', renderGeneration);
         break;
       case 'notes':
-        this.renderTabPlaceholder(content, 'notes', 'NoteList');
+        this.renderTabPlaceholder(content, 'notes', 'NoteList', renderGeneration);
         break;
       case 'timer':
-        this.renderTabPlaceholder(content, 'timer', 'TimeTracker');
+        this.renderTabPlaceholder(content, 'timer', 'TimeTracker', renderGeneration);
         break;
       case 'terminal':
-        this.renderTerminalTab(content);
+        this.renderTerminalTab(content, renderGeneration);
         break;
     }
   }
 
-  async renderTerminalTab(container) {
+  async renderTerminalTab(container, renderGeneration) {
     try {
       const { TerminalPanel } = await import('../terminal/TerminalPanel.js');
+      if (!this._isCurrentTabRender('terminal', renderGeneration, container)) return;
       const isSSH = !!this.project.ssh_host;
-      this._terminalPanel = new TerminalPanel(this.projectId, this.project.path, { isSSH, project: this.project });
-      this._terminalEl = this._terminalPanel.render();
-      container.appendChild(this._terminalEl);
+      const panel = new TerminalPanel(this.projectId, this.project.path, { isSSH, project: this.project });
+      const el = panel.render();
+      if (!this._isCurrentTabRender('terminal', renderGeneration, container)) {
+        try {
+          panel.destroy();
+        } catch (destroyError) {
+          console.warn('Failed to destroy stale terminal panel:', destroyError);
+        }
+        return;
+      }
+      this._terminalPanel = panel;
+      this._terminalEl = el;
+      container.appendChild(el);
     } catch (e) {
+      if (!this._isCurrentTabRender('terminal', renderGeneration, container)) return;
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">🔧</div>
@@ -223,7 +281,7 @@ export class ProjectDetail {
     }
   }
 
-  async renderOverview(container) {
+  async renderOverview(container, renderGeneration) {
     const p = this.project;
     container.innerHTML = `
       <div class="grid grid-cols-2 gap-6">
@@ -297,7 +355,9 @@ export class ProjectDetail {
     // Load activity
     try {
       const activities = await window.api.activity.list(this.projectId, 5);
+      if (!this._isCurrentTabRender('overview', renderGeneration, container)) return;
       const activityEl = container.querySelector('.overview-activity');
+      if (!activityEl) return;
       if (!activities || activities.length === 0) {
         activityEl.innerHTML = `<p class="text-sm text-slate-500">No activity yet</p>`;
       } else {
@@ -316,40 +376,56 @@ export class ProjectDetail {
         });
       }
     } catch (e) {
+      if (this._destroyed) return;
       console.error('Failed to load activity:', e);
     }
   }
 
-  async renderTabPlaceholder(container, tabId, componentName) {
+  async renderTabPlaceholder(container, tabId, componentName, renderGeneration) {
     // Dynamically load feature components
     try {
+      this._destroyTabComponent(tabId);
       let component;
       switch (tabId) {
         case 'todos': {
           const { TodoList } = await import('../todos/TodoList.js');
+          if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
           component = new TodoList(this.projectId);
           break;
         }
         case 'notes': {
           const { NoteList } = await import('../notes/NoteList.js');
+          if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
           component = new NoteList(this.projectId);
           break;
         }
         case 'timer': {
           const { TimeTracker } = await import('../timer/TimeTracker.js');
+          if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
           component = new TimeTracker(this.projectId);
           break;
         }
         case 'terminal': {
           const { TerminalPanel } = await import('../terminal/TerminalPanel.js');
+          if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
           component = new TerminalPanel(this.projectId, this.project.path);
           break;
         }
       }
       if (component) {
+        if (!this._isCurrentTabRender(tabId, renderGeneration, container)) {
+          try {
+            component.destroy?.();
+          } catch (destroyError) {
+            console.warn(`Failed to destroy stale ${tabId} tab component:`, destroyError);
+          }
+          return;
+        }
         container.appendChild(component.render());
+        this._tabComponents.set(tabId, component);
       }
     } catch (e) {
+      if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">🔧</div>
@@ -358,6 +434,26 @@ export class ProjectDetail {
         </div>
       `;
     }
+  }
+
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    this._destroyAllTabComponents();
+    if (this._terminalPanel) {
+      try {
+        this._terminalPanel.destroy();
+      } catch (e) {
+        console.warn('Failed to destroy project terminal panel:', e);
+      }
+    }
+    if (this._terminalEl?.parentNode) {
+      this._terminalEl.parentNode.removeChild(this._terminalEl);
+    }
+    this._terminalPanel = null;
+    this._terminalEl = null;
+    this.container = null;
+    this.onNavigate = null;
   }
 
   statusLabel(status) {

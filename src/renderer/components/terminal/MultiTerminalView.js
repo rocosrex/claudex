@@ -14,6 +14,10 @@ export class MultiTerminalView {
     this.cells = []; // { termId, term, fitAddon, cellEl, projectName }
     this.dragSourceIndex = -1;
     this.resizeObserver = null;
+    this._unsubscribeSttState = null;
+    this._unsubscribeSttTranscribed = null;
+    this._onDocumentClick = null;
+    this._destroyed = false;
   }
 
   render() {
@@ -67,9 +71,12 @@ export class MultiTerminalView {
       menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
     });
 
-    document.addEventListener('click', () => {
-      menu.style.display = 'none';
-    });
+    this._onDocumentClick = () => {
+      if (this.container && this.container.isConnected) {
+        menu.style.display = 'none';
+      }
+    };
+    document.addEventListener('click', this._onDocumentClick);
 
     menu.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -138,9 +145,15 @@ export class MultiTerminalView {
 
   // --- Terminal creation ---
   async addTerminal(projectId, projectPath, title) {
+    if (this._destroyed) return;
     if (this.cells.length >= MAX_TERMINALS) return;
 
     const result = await window.api.terminal.create(projectId, projectPath);
+    if (this._destroyed && result.termId) {
+      await this._closeBackendTerminal(result.termId, 'late local create');
+    }
+    if (this._destroyed) return;
+
     if (result.error) {
       Toast.show(`Failed to create terminal: ${result.error}`, 'error');
       return;
@@ -150,11 +163,13 @@ export class MultiTerminalView {
   }
 
   async addSSHTerminal(projectId, title) {
+    if (this._destroyed) return;
     if (this.cells.length >= MAX_TERMINALS) return;
 
     const projects = store.getState().projects || [];
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
+    if (this._destroyed) return;
 
     // Decrypt password if stored (works for password auth, key passphrase, etc.)
     let password = '';
@@ -163,6 +178,7 @@ export class MultiTerminalView {
         password = await window.api.security.decryptPassword(project.ssh_password_encrypted);
       } catch (e) { /* ignore */ }
     }
+    if (this._destroyed) return;
 
     const sshConfig = {
       host: project.ssh_host,
@@ -174,6 +190,11 @@ export class MultiTerminalView {
     };
 
     const result = await window.api.terminal.createSSH(projectId, sshConfig);
+    if (this._destroyed && result.termId) {
+      await this._closeBackendTerminal(result.termId, 'late SSH create');
+    }
+    if (this._destroyed) return;
+
     if (result.error) {
       Toast.show(`SSH connection failed: ${result.error}`, 'error');
       return;
@@ -181,6 +202,30 @@ export class MultiTerminalView {
 
     const startupCommand = project.ssh_startup_command || '';
     this.createCell(result.termId, title, { autoTmux: false, startupCommand });
+  }
+
+  _hasTerminalCell(termId) {
+    return this.cells.some(cell => cell.type === 'terminal' && cell.termId === termId && !cell.closing);
+  }
+
+  _closeBackendTerminal(termId, context) {
+    try {
+      return Promise.resolve(window.api.terminal.close(termId)).catch((e) => {
+        console.warn(`Workbench backend close failed during ${context}`, e);
+      });
+    } catch (e) {
+      console.warn(`Workbench backend close failed during ${context}`, e);
+      return Promise.resolve();
+    }
+  }
+
+  async _sendStartupInput(termId, data) {
+    if (this._destroyed || !this._hasTerminalCell(termId)) return;
+    try {
+      await window.api.terminal.input(termId, data);
+    } catch (e) {
+      console.warn('Workbench delayed startup input failed', e);
+    }
   }
 
   createCell(termId, title, options = {}) {
@@ -274,38 +319,45 @@ export class MultiTerminalView {
       // Auto-start tmux (local terminals only), then startup command
       if (options.autoTmux) {
         setTimeout(() => {
-          window.api.terminal.input(termId, 'tmux new-session\r');
+          if (this._destroyed || !this._hasTerminalCell(termId)) return;
+          this._sendStartupInput(termId, 'tmux new-session\r');
           if (options.startupCommand) {
             setTimeout(() => {
-              window.api.terminal.input(termId, options.startupCommand + '\r');
+              this._sendStartupInput(termId, options.startupCommand + '\r');
             }, 1000);
           }
         }, 300);
       } else if (options.startupCommand) {
         // SSH terminals: send startup command directly (no tmux)
         setTimeout(() => {
-          window.api.terminal.input(termId, options.startupCommand + '\r');
+          this._sendStartupInput(termId, options.startupCommand + '\r');
         }, 500);
       }
     });
   }
 
   async removeCell(cellData) {
+    if (cellData.closing) return;
     const index = this.cells.indexOf(cellData);
     if (index === -1) return;
+    cellData.closing = true;
 
     if (cellData.type === 'terminal') {
       terminalRouter.unregister(cellData.termId);
-      await window.api.terminal.close(cellData.termId);
-      cellData.term.dispose();
+      await this._closeBackendTerminal(cellData.termId, 'cell remove');
     } else if (cellData.type === 'editor') {
       if (cellData.saveTimeout) clearTimeout(cellData.saveTimeout);
       if (cellData.keyHandler) document.removeEventListener('keydown', cellData.keyHandler);
     }
     // pdf: no extra cleanup needed
 
+    const cellIndex = this.cells.indexOf(cellData);
+    if (cellIndex === -1) return;
+    if (cellData.type === 'terminal') {
+      cellData.term.dispose();
+    }
     if (cellData.cellEl.parentNode) cellData.cellEl.remove();
-    this.cells.splice(index, 1);
+    this.cells.splice(cellIndex, 1);
 
     this.updateGridLayout();
 
@@ -587,7 +639,7 @@ export class MultiTerminalView {
     grid.appendChild(this.sttIndicator.render());
 
     // State change → update indicator and button
-    sttService.onStateChange((state) => {
+    this._unsubscribeSttState = sttService.onStateChange((state) => {
       this.sttIndicator.update(state);
       const btn = this.container.querySelector('.btn-stt-toggle');
       if (btn) {
@@ -605,7 +657,7 @@ export class MultiTerminalView {
     });
 
     // Transcribed → insert into the last focused terminal cell
-    sttService.onTranscribed((text) => {
+    this._unsubscribeSttTranscribed = sttService.onTranscribed((text) => {
       // Find the last terminal cell that has focus, or the last one
       const termCells = this.cells.filter(c => c.type === 'terminal');
       if (termCells.length === 0) return;
@@ -620,13 +672,26 @@ export class MultiTerminalView {
 
   // --- Cleanup ---
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
+    this._unsubscribeSttState?.();
+    this._unsubscribeSttTranscribed?.();
+    this._unsubscribeSttState = null;
+    this._unsubscribeSttTranscribed = null;
+
+    if (this._onDocumentClick) {
+      document.removeEventListener('click', this._onDocumentClick);
+      this._onDocumentClick = null;
+    }
+
     if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.sttIndicator) this.sttIndicator.destroy();
     this.cells.forEach(cell => {
       if (cell.type === 'terminal') {
         terminalRouter.unregister(cell.termId);
-        window.api.terminal.close(cell.termId);
+        this._closeBackendTerminal(cell.termId, 'destroy');
         cell.term.dispose();
       } else if (cell.type === 'editor') {
         if (cell.saveTimeout) clearTimeout(cell.saveTimeout);

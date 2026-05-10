@@ -25,6 +25,10 @@ export class TerminalPanel {
     this.fitAddon = null;
     this.tabs = [];        // Manage multiple terminal sessions
     this.activeTabIndex = 0;
+    this.resizeObserver = null;
+    this._destroyed = false;
+    this._unsubscribeSttState = null;
+    this._unsubscribeSttTranscribed = null;
   }
 
   render() {
@@ -73,9 +77,54 @@ export class TerminalPanel {
     return container;
   }
 
+  setupResizeObserver() {
+    if (this.resizeObserver) return;
+    const termContainer = this.container.querySelector('.terminal-container');
+    this.resizeObserver = new ResizeObserver(() => this.fitActiveTab());
+    this.resizeObserver.observe(termContainer);
+  }
+
+  fitTab(tab) {
+    if (!tab) return;
+    try {
+      tab.fitAddon.fit();
+      const dims = tab.fitAddon.proposeDimensions();
+      if (dims && dims.cols > 0 && dims.rows > 0) {
+        window.api.terminal.resize(tab.termId, dims.cols, dims.rows);
+      }
+    } catch (e) {
+      // Ignore fit errors from detached or hidden terminals.
+    }
+  }
+
+  fitActiveTab() {
+    this.fitTab(this.tabs[this.activeTabIndex]);
+  }
+
+  _hasTab(termId) {
+    return this.tabs.some(tab => tab.termId === termId && !tab.closing);
+  }
+
+  _closeBackendTerminal(termId, context) {
+    try {
+      return Promise.resolve(window.api.terminal.close(termId)).catch((e) => {
+        console.warn(`Terminal backend close failed during ${context}`, e);
+      });
+    } catch (e) {
+      console.warn(`Terminal backend close failed during ${context}`, e);
+      return Promise.resolve();
+    }
+  }
+
   // --- Terminal creation ---
   async createTerminalSession(runClaude = false) {
+    if (this._destroyed) return;
     const result = await window.api.terminal.create(this.projectId, this.projectPath);
+    if (this._destroyed && result.termId) {
+      await this._closeBackendTerminal(result.termId, 'late local create');
+    }
+    if (this._destroyed) return;
+
     if (result.error) {
       Toast.show(`Failed to create terminal: ${result.error}`, 'error');
       return;
@@ -166,21 +215,17 @@ export class TerminalPanel {
     term.focus();
 
     // Resize handling
-    this.resizeObserver = new ResizeObserver(() => {
-      try {
-        fitAddon.fit();
-        const dims = fitAddon.proposeDimensions();
-        if (dims && dims.cols > 0 && dims.rows > 0) {
-          window.api.terminal.resize(termId, dims.cols, dims.rows);
-        }
-      } catch (e) { /* ignore */ }
-    });
-    this.resizeObserver.observe(termContainer);
+    this.setupResizeObserver();
 
     // Run Claude Code
     if (runClaude) {
-      setTimeout(() => {
-        window.api.terminal.runClaude(termId);
+      setTimeout(async () => {
+        if (this._destroyed || !this._hasTab(termId)) return;
+        try {
+          await window.api.terminal.runClaude(termId);
+        } catch (e) {
+          // Ignore delayed run failures after the terminal has closed.
+        }
       }, 500);
     }
 
@@ -232,10 +277,8 @@ export class TerminalPanel {
     tab.wrapper.style.display = '';
 
     requestAnimationFrame(() => {
-      try {
-        tab.fitAddon.fit();
-        tab.term.focus();
-      } catch (e) { /* ignore */ }
+      this.fitTab(tab);
+      try { tab.term.focus(); } catch (e) { /* ignore */ }
     });
 
     this.termId = tab.termId;
@@ -246,20 +289,39 @@ export class TerminalPanel {
 
   async closeTab(index) {
     const tab = this.tabs[index];
+    if (!tab || tab.closing) return;
+    tab.closing = true;
     terminalRouter.unregister(tab.termId);
-    await window.api.terminal.close(tab.termId);
+    await this._closeBackendTerminal(tab.termId, 'tab close');
+
+    const tabIndex = this.tabs.indexOf(tab);
+    if (tabIndex === -1) return;
+    const currentActiveTab = this.tabs[this.activeTabIndex];
     tab.term.dispose();
     if (tab.wrapper.parentNode) tab.wrapper.parentNode.removeChild(tab.wrapper);
-    this.tabs.splice(index, 1);
+    this.tabs.splice(tabIndex, 1);
 
     if (this.tabs.length === 0) {
       const placeholder = this.container.querySelector('.terminal-placeholder');
       if (placeholder) placeholder.style.display = 'flex';
       this.termId = null;
       this.terminal = null;
+      this.fitAddon = null;
     } else {
-      this.activeTabIndex = Math.min(this.activeTabIndex, this.tabs.length - 1);
-      this.switchTab(this.activeTabIndex);
+      const activeTabIndex = currentActiveTab && currentActiveTab !== tab && !currentActiveTab.closing
+        ? this.tabs.indexOf(currentActiveTab)
+        : -1;
+      const fallbackTabIndex = this.tabs.findIndex(candidate => !candidate.closing);
+      this.activeTabIndex = activeTabIndex !== -1
+        ? activeTabIndex
+        : fallbackTabIndex;
+      if (this.activeTabIndex !== -1) {
+        this.switchTab(this.activeTabIndex);
+      } else {
+        this.termId = null;
+        this.terminal = null;
+        this.fitAddon = null;
+      }
     }
     this.renderTabs();
   }
@@ -274,11 +336,17 @@ export class TerminalPanel {
       }
     });
 
-    this.container.querySelector('.btn-run-claude').addEventListener('click', () => {
+    this.container.querySelector('.btn-run-claude').addEventListener('click', async () => {
       if (this.isSSH) {
         this._createSSHSessionFromProject(true);
       } else if (this.termId && this.terminal) {
-        window.api.terminal.runClaude(this.termId);
+        const termId = this.termId;
+        if (!this._hasTab(termId)) return;
+        try {
+          await window.api.terminal.runClaude(termId);
+        } catch (e) {
+          console.warn('Terminal Run Claude failed', e);
+        }
       } else {
         this.createAndRunClaude();
       }
@@ -315,22 +383,29 @@ export class TerminalPanel {
       keyPath: p.ssh_key_path || '',
     };
 
-    await this.createSSHSession(this.projectId, sshConfig);
+    const termId = await this.createSSHSession(this.projectId, sshConfig);
 
     // Send startup command after connection
     const startupCmd = runClaude
       ? (p.ssh_startup_command || '')
       : '';
-    if (startupCmd) {
+    if (termId && startupCmd) {
       setTimeout(() => {
-        window.api.terminal.input(this.termId, startupCmd + '\r');
+        if (this._destroyed || !this._hasTab(termId)) return;
+        window.api.terminal.input(termId, startupCmd + '\r');
       }, 500);
     }
   }
 
   // --- SSH Terminal ---
   async createSSHSession(projectId, sshConfig) {
+    if (this._destroyed) return;
     const result = await window.api.terminal.createSSH(projectId, sshConfig);
+    if (this._destroyed && result.termId) {
+      await this._closeBackendTerminal(result.termId, 'late SSH create');
+    }
+    if (this._destroyed) return;
+
     if (result.error) {
       Toast.show(`SSH connection failed: ${result.error}`, 'error');
       return;
@@ -404,24 +479,12 @@ export class TerminalPanel {
 
     term.focus();
 
-    if (!this.resizeObserver) {
-      this.resizeObserver = new ResizeObserver(() => {
-        const activeTab = this.tabs[this.activeTabIndex];
-        if (!activeTab) return;
-        try {
-          activeTab.fitAddon.fit();
-          const dims = activeTab.fitAddon.proposeDimensions();
-          if (dims && dims.cols > 0 && dims.rows > 0) {
-            window.api.terminal.resize(activeTab.termId, dims.cols, dims.rows);
-          }
-        } catch (e) { /* ignore */ }
-      });
-      this.resizeObserver.observe(termContainer);
-    }
+    this.setupResizeObserver();
 
     this.termId = termId;
     this.terminal = term;
     this.fitAddon = fitAddon;
+    return termId;
   }
 
   // --- STT Setup ---
@@ -432,7 +495,7 @@ export class TerminalPanel {
     body.appendChild(this.sttIndicator.render());
 
     // STT state change → update indicator and button
-    sttService.onStateChange((state) => {
+    this._unsubscribeSttState = sttService.onStateChange((state) => {
       this.sttIndicator.update(state);
       const btn = this.container.querySelector('.btn-stt-toggle');
       if (btn) {
@@ -445,7 +508,7 @@ export class TerminalPanel {
     });
 
     // STT transcribed → insert into active terminal
-    sttService.onTranscribed((text) => {
+    this._unsubscribeSttTranscribed = sttService.onTranscribed((text) => {
       if (this.termId) {
         window.api.terminal.input(this.termId, text);
       }
@@ -477,14 +540,33 @@ export class TerminalPanel {
 
   // --- Cleanup ---
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
-    if (this.resizeObserver) this.resizeObserver.disconnect();
-    if (this.sttIndicator) this.sttIndicator.destroy();
-    this.tabs.forEach(tab => {
+    this._unsubscribeSttState?.();
+    this._unsubscribeSttTranscribed?.();
+    this._unsubscribeSttState = null;
+    this._unsubscribeSttTranscribed = null;
+
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+    if (this.sttIndicator) {
+      this.sttIndicator.destroy();
+      this.sttIndicator = null;
+    }
+
+    for (const tab of [...this.tabs]) {
       terminalRouter.unregister(tab.termId);
-      window.api.terminal.close(tab.termId);
+      this._closeBackendTerminal(tab.termId, 'destroy');
       tab.term.dispose();
-    });
+      if (tab.wrapper.parentNode) tab.wrapper.parentNode.removeChild(tab.wrapper);
+    }
     this.tabs = [];
+    this.termId = null;
+    this.terminal = null;
+    this.fitAddon = null;
   }
 }
