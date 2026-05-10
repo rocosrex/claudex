@@ -14,8 +14,8 @@ class STTService {
     this.silenceStart = null;
 
     // Callbacks
-    this._onTranscribed = null;
-    this._onStateChange = null;
+    this._transcribedListeners = new Set();
+    this._stateListeners = new Set();
 
     // Config
     this.silenceThreshold = 0.035; // RMS threshold — high enough to ignore distant voices
@@ -39,16 +39,25 @@ class STTService {
   }
 
   onTranscribed(callback) {
-    this._onTranscribed = callback;
+    this._transcribedListeners.add(callback);
+    return () => this._transcribedListeners.delete(callback);
   }
 
   onStateChange(callback) {
-    this._onStateChange = callback;
+    this._stateListeners.add(callback);
+    callback(this.state);
+    return () => this._stateListeners.delete(callback);
   }
 
   _setState(newState) {
     this.state = newState;
-    if (this._onStateChange) this._onStateChange(newState);
+    for (const callback of [...this._stateListeners]) {
+      try {
+        callback(newState);
+      } catch (e) {
+        console.error('STT state listener failed:', e);
+      }
+    }
   }
 
   setSpeakerVerification(enabled) {
@@ -263,8 +272,14 @@ class STTService {
 
       const text = (result.text || '').trim();
       // Filter: discard very short transcriptions (noise artifacts like "어", "음")
-      if (text.length >= this.minTextLength && this._onTranscribed) {
-        this._onTranscribed(text);
+      if (text.length >= this.minTextLength) {
+        for (const callback of [...this._transcribedListeners]) {
+          try {
+            callback(text);
+          } catch (e) {
+            console.error('STT transcription listener failed:', e);
+          }
+        }
       }
     } catch (e) {
       console.error('STT transcription failed:', e);

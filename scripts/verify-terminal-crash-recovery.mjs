@@ -30,4 +30,13 @@ contains(main, 'if (rendererRecoveryShown)', 'createWindow must branch for recov
 contains(main, "reason: 'recovery-mode'", 'recreated recovery windows must have fallback recovery details');
 contains(main, 'showRendererRecoveryPage(mainWindow', 'createWindow must load recovery page during recovery mode');
 
+const stt = read('src/renderer/utils/stt-service.js');
+
+contains(stt, '_transcribedListeners = new Set()', 'STT service must keep transcribed listeners in a Set');
+contains(stt, '_stateListeners = new Set()', 'STT service must keep state listeners in a Set');
+contains(stt, 'return () => this._transcribedListeners.delete(callback)', 'STT transcribed subscriptions must be removable');
+contains(stt, 'return () => this._stateListeners.delete(callback)', 'STT state subscriptions must be removable');
+contains(stt, 'for (const callback of [...this._stateListeners])', 'STT service must notify all state listeners safely');
+contains(stt, 'for (const callback of [...this._transcribedListeners])', 'STT service must notify all transcription listeners safely');
+
 console.log('terminal crash recovery verification passed');
