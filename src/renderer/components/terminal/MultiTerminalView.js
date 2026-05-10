@@ -205,7 +205,7 @@ export class MultiTerminalView {
   }
 
   _hasTerminalCell(termId) {
-    return this.cells.some(cell => cell.type === 'terminal' && cell.termId === termId);
+    return this.cells.some(cell => cell.type === 'terminal' && cell.termId === termId && !cell.closing);
   }
 
   async _sendStartupInput(termId, data) {
@@ -326,8 +326,10 @@ export class MultiTerminalView {
   }
 
   async removeCell(cellData) {
+    if (cellData.closing) return;
     const index = this.cells.indexOf(cellData);
     if (index === -1) return;
+    cellData.closing = true;
 
     if (cellData.type === 'terminal') {
       terminalRouter.unregister(cellData.termId);

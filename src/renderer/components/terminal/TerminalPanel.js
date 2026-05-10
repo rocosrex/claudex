@@ -102,7 +102,7 @@ export class TerminalPanel {
   }
 
   _hasTab(termId) {
-    return this.tabs.some(tab => tab.termId === termId);
+    return this.tabs.some(tab => tab.termId === termId && !tab.closing);
   }
 
   // --- Terminal creation ---
@@ -278,6 +278,8 @@ export class TerminalPanel {
 
   async closeTab(index) {
     const tab = this.tabs[index];
+    if (!tab || tab.closing) return;
+    tab.closing = true;
     terminalRouter.unregister(tab.termId);
     await window.api.terminal.close(tab.termId);
     tab.term.dispose();
