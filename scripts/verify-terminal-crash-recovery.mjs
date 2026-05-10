@@ -60,15 +60,24 @@ contains(terminalPanel, 'if (this._destroyed) return;\n    const result = await 
 contains(terminalPanel, 'if (this._destroyed) return;\n    const result = await window.api.terminal.createSSH(projectId, sshConfig);', 'TerminalPanel must skip SSH terminal creation after destroy');
 containsAtLeast(terminalPanel, 'this._destroyed && result.termId', 2, 'TerminalPanel must detect backend terminals created after destroy');
 containsAtLeast(terminalPanel, 'window.api.terminal.close(result.termId)', 2, 'TerminalPanel must close backend terminals created after destroy');
-contains(terminalPanel, 'if (this._destroyed) return;\n        window.api.terminal.runClaude(termId);', 'TerminalPanel delayed Claude run must skip after destroy');
-contains(terminalPanel, "if (this._destroyed) return;\n        window.api.terminal.input(this.termId, startupCmd + '\\r');", 'TerminalPanel delayed SSH startup input must skip after destroy');
+contains(terminalPanel, '_hasTab(termId)', 'TerminalPanel must provide a stable tab existence helper');
+containsAtLeast(terminalPanel, 'this._hasTab(termId)', 2, 'TerminalPanel delayed commands must verify the target tab still exists');
+contains(terminalPanel, 'await window.api.terminal.runClaude(termId)', 'TerminalPanel delayed Claude run must use the captured termId');
+contains(terminalPanel, 'try {\n          await window.api.terminal.runClaude(termId);\n        } catch (e) {', 'TerminalPanel delayed Claude run rejection must be caught');
+contains(terminalPanel, "window.api.terminal.input(termId, startupCmd + '\\r')", 'TerminalPanel delayed SSH startup input must use the captured termId');
+contains(terminalPanel, "const termId = await this.createSSHSession(this.projectId, sshConfig)", 'TerminalPanel SSH startup must capture the created termId');
 contains(terminalPanel, 'this.fitTab(tab);', 'TerminalPanel tab switching must resize backend through fit helper');
 
 contains(multiTerminal, 'this._unsubscribeSttState = null', 'Workbench must store STT state unsubscribe');
 contains(multiTerminal, 'this._unsubscribeSttTranscribed = null', 'Workbench must store STT transcription unsubscribe');
 contains(multiTerminal, 'this._onDocumentClick = null', 'Workbench must store document click cleanup');
+contains(multiTerminal, 'this._destroyed = false', 'Workbench must track destroy state');
+contains(multiTerminal, 'if (this._destroyed) return', 'Workbench must guard async work after destroy');
+containsAtLeast(multiTerminal, 'if (this._destroyed && result.termId)', 2, 'Workbench must detect backend terminals created after destroy');
+containsAtLeast(multiTerminal, 'window.api.terminal.close(result.termId)', 2, 'Workbench must close backend terminals created after destroy');
 contains(multiTerminal, 'this._unsubscribeSttState?.()', 'Workbench must unsubscribe STT state listener');
 contains(multiTerminal, 'this._unsubscribeSttTranscribed?.()', 'Workbench must unsubscribe STT transcription listener');
 contains(multiTerminal, "document.removeEventListener('click', this._onDocumentClick)", 'Workbench must remove document click listener on destroy');
+contains(multiTerminal, 'if (this._destroyed) return;\n    this._destroyed = true;', 'Workbench destroy must be idempotent');
 
 console.log('terminal crash recovery verification passed');

@@ -101,6 +101,10 @@ export class TerminalPanel {
     this.fitTab(this.tabs[this.activeTabIndex]);
   }
 
+  _hasTab(termId) {
+    return this.tabs.some(tab => tab.termId === termId);
+  }
+
   // --- Terminal creation ---
   async createTerminalSession(runClaude = false) {
     if (this._destroyed) return;
@@ -204,9 +208,13 @@ export class TerminalPanel {
 
     // Run Claude Code
     if (runClaude) {
-      setTimeout(() => {
-        if (this._destroyed) return;
-        window.api.terminal.runClaude(termId);
+      setTimeout(async () => {
+        if (this._destroyed || !this._hasTab(termId)) return;
+        try {
+          await window.api.terminal.runClaude(termId);
+        } catch (e) {
+          // Ignore delayed run failures after the terminal has closed.
+        }
       }, 500);
     }
 
@@ -339,16 +347,16 @@ export class TerminalPanel {
       keyPath: p.ssh_key_path || '',
     };
 
-    await this.createSSHSession(this.projectId, sshConfig);
+    const termId = await this.createSSHSession(this.projectId, sshConfig);
 
     // Send startup command after connection
     const startupCmd = runClaude
       ? (p.ssh_startup_command || '')
       : '';
-    if (startupCmd) {
+    if (termId && startupCmd) {
       setTimeout(() => {
-        if (this._destroyed) return;
-        window.api.terminal.input(this.termId, startupCmd + '\r');
+        if (this._destroyed || !this._hasTab(termId)) return;
+        window.api.terminal.input(termId, startupCmd + '\r');
       }, 500);
     }
   }
@@ -440,6 +448,7 @@ export class TerminalPanel {
     this.termId = termId;
     this.terminal = term;
     this.fitAddon = fitAddon;
+    return termId;
   }
 
   // --- STT Setup ---

@@ -17,6 +17,7 @@ export class MultiTerminalView {
     this._unsubscribeSttState = null;
     this._unsubscribeSttTranscribed = null;
     this._onDocumentClick = null;
+    this._destroyed = false;
   }
 
   render() {
@@ -144,9 +145,15 @@ export class MultiTerminalView {
 
   // --- Terminal creation ---
   async addTerminal(projectId, projectPath, title) {
+    if (this._destroyed) return;
     if (this.cells.length >= MAX_TERMINALS) return;
 
     const result = await window.api.terminal.create(projectId, projectPath);
+    if (this._destroyed && result.termId) {
+      await window.api.terminal.close(result.termId);
+    }
+    if (this._destroyed) return;
+
     if (result.error) {
       Toast.show(`Failed to create terminal: ${result.error}`, 'error');
       return;
@@ -156,11 +163,13 @@ export class MultiTerminalView {
   }
 
   async addSSHTerminal(projectId, title) {
+    if (this._destroyed) return;
     if (this.cells.length >= MAX_TERMINALS) return;
 
     const projects = store.getState().projects || [];
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
+    if (this._destroyed) return;
 
     // Decrypt password if stored (works for password auth, key passphrase, etc.)
     let password = '';
@@ -169,6 +178,7 @@ export class MultiTerminalView {
         password = await window.api.security.decryptPassword(project.ssh_password_encrypted);
       } catch (e) { /* ignore */ }
     }
+    if (this._destroyed) return;
 
     const sshConfig = {
       host: project.ssh_host,
@@ -180,6 +190,11 @@ export class MultiTerminalView {
     };
 
     const result = await window.api.terminal.createSSH(projectId, sshConfig);
+    if (this._destroyed && result.termId) {
+      await window.api.terminal.close(result.termId);
+    }
+    if (this._destroyed) return;
+
     if (result.error) {
       Toast.show(`SSH connection failed: ${result.error}`, 'error');
       return;
@@ -626,6 +641,9 @@ export class MultiTerminalView {
 
   // --- Cleanup ---
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
     this._unsubscribeSttState?.();
     this._unsubscribeSttTranscribed?.();
