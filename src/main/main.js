@@ -17,14 +17,26 @@ let mainWindow = null;
 const RENDERER_CRASH_WINDOW_MS = 30_000;
 const RENDERER_CRASH_LIMIT = 3;
 let rendererCrashTimestamps = [];
+let rendererRecoveryShown = false;
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
 
 function rendererRecoveryHtml(reason, exitCode) {
-  const safeReason = String(reason || 'unknown');
-  const safeExitCode = exitCode === undefined ? 'unknown' : String(exitCode);
+  const safeReason = escapeHtml(reason || 'unknown');
+  const safeExitCode = escapeHtml(exitCode === undefined ? 'unknown' : exitCode);
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none';">
   <title>Claudex Recovery</title>
   <style>
     body {
@@ -67,7 +79,8 @@ function rendererRecoveryHtml(reason, exitCode) {
 }
 
 function showRendererRecoveryPage(win, details) {
-  if (!win || win.isDestroyed()) return;
+  if (!win || win.isDestroyed() || rendererRecoveryShown) return;
+  rendererRecoveryShown = true;
   const html = rendererRecoveryHtml(details?.reason, details?.exitCode);
   win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`).catch((err) => {
     console.error('[renderer-recovery] Failed to show recovery page:', err.message);
@@ -75,7 +88,7 @@ function showRendererRecoveryPage(win, details) {
 }
 
 function recoverRenderer(win, details) {
-  if (!win || win.isDestroyed()) return;
+  if (!win || win.isDestroyed() || rendererRecoveryShown) return;
 
   const now = Date.now();
   rendererCrashTimestamps = rendererCrashTimestamps
@@ -90,7 +103,7 @@ function recoverRenderer(win, details) {
   }
 
   setTimeout(() => {
-    if (!win.isDestroyed()) {
+    if (!win.isDestroyed() && !rendererRecoveryShown) {
       win.reload();
     }
   }, 500);

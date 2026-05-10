@@ -21,5 +21,9 @@ contains(main, 'unresponsive', 'main process must log unresponsive renderers');
 contains(main, 'rendererCrashTimestamps', 'main process must track recent renderer crashes');
 contains(main, 'showRendererRecoveryPage', 'main process must have a recovery page path');
 contains(main, 'attachWindowRecoveryHandlers(mainWindow)', 'BrowserWindow must attach recovery handlers');
+contains(main, 'rendererRecoveryShown', 'main process must guard recovery page loops');
+contains(main, 'function escapeHtml', 'recovery page must escape dynamic details');
+contains(main, 'Content-Security-Policy', 'recovery page must include a CSP');
+contains(main, "default-src 'none'", 'recovery page CSP must deny default loads');
 
 console.log('terminal crash recovery verification passed');
