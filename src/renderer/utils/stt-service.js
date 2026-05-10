@@ -45,7 +45,11 @@ class STTService {
 
   onStateChange(callback) {
     this._stateListeners.add(callback);
-    callback(this.state);
+    try {
+      callback(this.state);
+    } catch (e) {
+      console.error('STT state listener failed:', e);
+    }
     return () => this._stateListeners.delete(callback);
   }
 

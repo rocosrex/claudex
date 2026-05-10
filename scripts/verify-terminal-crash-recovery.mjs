@@ -36,6 +36,7 @@ contains(stt, '_transcribedListeners = new Set()', 'STT service must keep transc
 contains(stt, '_stateListeners = new Set()', 'STT service must keep state listeners in a Set');
 contains(stt, 'return () => this._transcribedListeners.delete(callback)', 'STT transcribed subscriptions must be removable');
 contains(stt, 'return () => this._stateListeners.delete(callback)', 'STT state subscriptions must be removable');
+contains(stt, 'try {\n      callback(this.state);\n    } catch (e) {', 'STT initial state callback must be isolated');
 contains(stt, 'for (const callback of [...this._stateListeners])', 'STT service must notify all state listeners safely');
 contains(stt, 'for (const callback of [...this._transcribedListeners])', 'STT service must notify all transcription listeners safely');
 
