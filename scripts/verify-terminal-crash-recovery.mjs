@@ -59,7 +59,10 @@ contains(terminalPanel, 'this._unsubscribeSttTranscribed?.()', 'TerminalPanel mu
 contains(terminalPanel, 'if (this._destroyed) return;\n    const result = await window.api.terminal.create(this.projectId, this.projectPath);', 'TerminalPanel must skip local terminal creation after destroy');
 contains(terminalPanel, 'if (this._destroyed) return;\n    const result = await window.api.terminal.createSSH(projectId, sshConfig);', 'TerminalPanel must skip SSH terminal creation after destroy');
 containsAtLeast(terminalPanel, 'this._destroyed && result.termId', 2, 'TerminalPanel must detect backend terminals created after destroy');
-containsAtLeast(terminalPanel, 'window.api.terminal.close(result.termId)', 2, 'TerminalPanel must close backend terminals created after destroy');
+contains(terminalPanel, '_closeBackendTerminal(termId, context)', 'TerminalPanel must centralize caught backend terminal closes');
+contains(terminalPanel, 'Promise.resolve(window.api.terminal.close(termId))', 'TerminalPanel backend close helper must catch invoke rejections');
+containsAtLeast(terminalPanel, 'await this._closeBackendTerminal(result.termId,', 2, 'TerminalPanel must safely close backend terminals created after destroy');
+contains(terminalPanel, "this._closeBackendTerminal(tab.termId, 'destroy')", 'TerminalPanel destroy must catch backend terminal close failures');
 contains(terminalPanel, '_hasTab(termId)', 'TerminalPanel must provide a stable tab existence helper');
 contains(terminalPanel, 'tab.termId === termId && !tab.closing', 'TerminalPanel tab existence helper must reject closing tabs');
 containsAtLeast(terminalPanel, 'this._hasTab(termId)', 2, 'TerminalPanel delayed commands must verify the target tab still exists');
@@ -67,6 +70,9 @@ contains(terminalPanel, 'if (!tab || tab.closing) return;', 'TerminalPanel close
 contains(terminalPanel, 'tab.closing = true;', 'TerminalPanel closeTab must mark tabs closing before awaiting backend close');
 contains(terminalPanel, 'const tabIndex = this.tabs.indexOf(tab);', 'TerminalPanel closeTab must recompute tab index by identity after close');
 contains(terminalPanel, 'this.tabs.splice(tabIndex, 1);', 'TerminalPanel closeTab must remove the closed tab by identity');
+contains(terminalPanel, 'const currentActiveTab = this.tabs[this.activeTabIndex];', 'TerminalPanel closeTab must inspect current active tab after backend close');
+contains(terminalPanel, '!currentActiveTab.closing', 'TerminalPanel closeTab must preserve only live current active tabs');
+contains(terminalPanel, 'findIndex(candidate => !candidate.closing)', 'TerminalPanel closeTab must choose a live fallback tab');
 contains(terminalPanel, 'await window.api.terminal.runClaude(termId)', 'TerminalPanel delayed Claude run must use the captured termId');
 contains(terminalPanel, 'try {\n          await window.api.terminal.runClaude(termId);\n        } catch (e) {', 'TerminalPanel delayed Claude run rejection must be caught');
 contains(terminalPanel, "window.api.terminal.input(termId, startupCmd + '\\r')", 'TerminalPanel delayed SSH startup input must use the captured termId');
@@ -81,7 +87,10 @@ contains(multiTerminal, '_hasTerminalCell(termId)', 'Workbench must provide a li
 contains(multiTerminal, 'cell.termId === termId && !cell.closing', 'Workbench live terminal cell helper must reject closing cells');
 contains(multiTerminal, 'if (this._destroyed) return', 'Workbench must guard async work after destroy');
 containsAtLeast(multiTerminal, 'if (this._destroyed && result.termId)', 2, 'Workbench must detect backend terminals created after destroy');
-containsAtLeast(multiTerminal, 'window.api.terminal.close(result.termId)', 2, 'Workbench must close backend terminals created after destroy');
+contains(multiTerminal, '_closeBackendTerminal(termId, context)', 'Workbench must centralize caught backend terminal closes');
+contains(multiTerminal, 'Promise.resolve(window.api.terminal.close(termId))', 'Workbench backend close helper must catch invoke rejections');
+containsAtLeast(multiTerminal, 'await this._closeBackendTerminal(result.termId,', 2, 'Workbench must safely close backend terminals created after destroy');
+contains(multiTerminal, "this._closeBackendTerminal(cell.termId, 'destroy')", 'Workbench destroy must catch backend terminal close failures');
 contains(multiTerminal, 'async _sendStartupInput(termId, data)', 'Workbench delayed startup input must use a guarded helper');
 contains(multiTerminal, 'if (this._destroyed || !this._hasTerminalCell(termId)) return;', 'Workbench delayed startup input must guard destroyed and removed terminal cells');
 contains(multiTerminal, 'await window.api.terminal.input(termId, data)', 'Workbench delayed startup input must await terminal input');

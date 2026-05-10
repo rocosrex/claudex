@@ -105,12 +105,23 @@ export class TerminalPanel {
     return this.tabs.some(tab => tab.termId === termId && !tab.closing);
   }
 
+  _closeBackendTerminal(termId, context) {
+    try {
+      return Promise.resolve(window.api.terminal.close(termId)).catch((e) => {
+        console.warn(`Terminal backend close failed during ${context}`, e);
+      });
+    } catch (e) {
+      console.warn(`Terminal backend close failed during ${context}`, e);
+      return Promise.resolve();
+    }
+  }
+
   // --- Terminal creation ---
   async createTerminalSession(runClaude = false) {
     if (this._destroyed) return;
     const result = await window.api.terminal.create(this.projectId, this.projectPath);
     if (this._destroyed && result.termId) {
-      await window.api.terminal.close(result.termId);
+      await this._closeBackendTerminal(result.termId, 'late local create');
     }
     if (this._destroyed) return;
 
@@ -280,16 +291,12 @@ export class TerminalPanel {
     const tab = this.tabs[index];
     if (!tab || tab.closing) return;
     tab.closing = true;
-    const activeTab = this.tabs[this.activeTabIndex];
     terminalRouter.unregister(tab.termId);
-    try {
-      await window.api.terminal.close(tab.termId);
-    } catch (e) {
-      console.warn('Terminal close failed', e);
-    }
+    await this._closeBackendTerminal(tab.termId, 'tab close');
 
     const tabIndex = this.tabs.indexOf(tab);
     if (tabIndex === -1) return;
+    const currentActiveTab = this.tabs[this.activeTabIndex];
     tab.term.dispose();
     if (tab.wrapper.parentNode) tab.wrapper.parentNode.removeChild(tab.wrapper);
     this.tabs.splice(tabIndex, 1);
@@ -300,13 +307,20 @@ export class TerminalPanel {
       this.termId = null;
       this.terminal = null;
     } else {
-      const activeTabIndex = activeTab && activeTab !== tab
-        ? this.tabs.indexOf(activeTab)
+      const activeTabIndex = currentActiveTab && currentActiveTab !== tab && !currentActiveTab.closing
+        ? this.tabs.indexOf(currentActiveTab)
         : -1;
+      const fallbackTabIndex = this.tabs.findIndex(candidate => !candidate.closing);
       this.activeTabIndex = activeTabIndex !== -1
         ? activeTabIndex
-        : Math.min(tabIndex, this.tabs.length - 1);
-      this.switchTab(this.activeTabIndex);
+        : fallbackTabIndex;
+      if (this.activeTabIndex !== -1) {
+        this.switchTab(this.activeTabIndex);
+      } else {
+        this.termId = null;
+        this.terminal = null;
+        this.fitAddon = null;
+      }
     }
     this.renderTabs();
   }
@@ -381,7 +395,7 @@ export class TerminalPanel {
     if (this._destroyed) return;
     const result = await window.api.terminal.createSSH(projectId, sshConfig);
     if (this._destroyed && result.termId) {
-      await window.api.terminal.close(result.termId);
+      await this._closeBackendTerminal(result.termId, 'late SSH create');
     }
     if (this._destroyed) return;
 
@@ -539,7 +553,7 @@ export class TerminalPanel {
 
     for (const tab of [...this.tabs]) {
       terminalRouter.unregister(tab.termId);
-      window.api.terminal.close(tab.termId);
+      this._closeBackendTerminal(tab.termId, 'destroy');
       tab.term.dispose();
       if (tab.wrapper.parentNode) tab.wrapper.parentNode.removeChild(tab.wrapper);
     }

@@ -150,7 +150,7 @@ export class MultiTerminalView {
 
     const result = await window.api.terminal.create(projectId, projectPath);
     if (this._destroyed && result.termId) {
-      await window.api.terminal.close(result.termId);
+      await this._closeBackendTerminal(result.termId, 'late local create');
     }
     if (this._destroyed) return;
 
@@ -191,7 +191,7 @@ export class MultiTerminalView {
 
     const result = await window.api.terminal.createSSH(projectId, sshConfig);
     if (this._destroyed && result.termId) {
-      await window.api.terminal.close(result.termId);
+      await this._closeBackendTerminal(result.termId, 'late SSH create');
     }
     if (this._destroyed) return;
 
@@ -206,6 +206,17 @@ export class MultiTerminalView {
 
   _hasTerminalCell(termId) {
     return this.cells.some(cell => cell.type === 'terminal' && cell.termId === termId && !cell.closing);
+  }
+
+  _closeBackendTerminal(termId, context) {
+    try {
+      return Promise.resolve(window.api.terminal.close(termId)).catch((e) => {
+        console.warn(`Workbench backend close failed during ${context}`, e);
+      });
+    } catch (e) {
+      console.warn(`Workbench backend close failed during ${context}`, e);
+      return Promise.resolve();
+    }
   }
 
   async _sendStartupInput(termId, data) {
@@ -333,11 +344,7 @@ export class MultiTerminalView {
 
     if (cellData.type === 'terminal') {
       terminalRouter.unregister(cellData.termId);
-      try {
-        await window.api.terminal.close(cellData.termId);
-      } catch (e) {
-        console.warn('Workbench terminal close failed', e);
-      }
+      await this._closeBackendTerminal(cellData.termId, 'cell remove');
     } else if (cellData.type === 'editor') {
       if (cellData.saveTimeout) clearTimeout(cellData.saveTimeout);
       if (cellData.keyHandler) document.removeEventListener('keydown', cellData.keyHandler);
@@ -684,7 +691,7 @@ export class MultiTerminalView {
     this.cells.forEach(cell => {
       if (cell.type === 'terminal') {
         terminalRouter.unregister(cell.termId);
-        window.api.terminal.close(cell.termId);
+        this._closeBackendTerminal(cell.termId, 'destroy');
         cell.term.dispose();
       } else if (cell.type === 'editor') {
         if (cell.saveTimeout) clearTimeout(cell.saveTimeout);
