@@ -12,6 +12,10 @@ export class ProjectDetail {
     this.container = null;
     this.activeTab = 'overview';
     this.onNavigate = null; // set by App
+    this._tabComponents = new Map();
+    this._terminalPanel = null;
+    this._terminalEl = null;
+    this._destroyed = false;
   }
 
   render() {
@@ -29,16 +33,19 @@ export class ProjectDetail {
   }
 
   async loadProject() {
+    if (this._destroyed) return;
     try {
       const projects = store.getState().projects;
       this.project = projects.find(p => p.id === this.projectId);
 
       if (!this.project) {
         const allProjects = await window.api.projects.list();
+        if (this._destroyed) return;
         store.setState({ projects: allProjects });
         this.project = allProjects.find(p => p.id === this.projectId);
       }
 
+      if (this._destroyed) return;
       if (!this.project) {
         this.container.querySelector('.detail-header').innerHTML = `
           <div class="empty-state"><p class="text-slate-400">Project not found</p></div>
@@ -51,6 +58,7 @@ export class ProjectDetail {
       this.renderTabs();
       this.showTab(this.activeTab);
     } catch (e) {
+      if (this._destroyed) return;
       console.error('Failed to load project:', e);
       Toast.show('Failed to load project', 'error');
     }
@@ -162,7 +170,30 @@ export class ProjectDetail {
     });
   }
 
+  _destroyTabComponent(tabId) {
+    const component = this._tabComponents.get(tabId);
+    if (!component) return;
+    try {
+      component.destroy?.();
+    } catch (e) {
+      console.warn(`Failed to destroy ${tabId} tab component:`, e);
+    }
+    this._tabComponents.delete(tabId);
+  }
+
+  _destroyAllTabComponents() {
+    for (const tabId of this._tabComponents.keys()) {
+      this._destroyTabComponent(tabId);
+    }
+  }
+
   showTab(tabId) {
+    if (this._destroyed || !this.container) return;
+    const previousTab = this.activeTab;
+    if (previousTab !== tabId && previousTab !== 'terminal') {
+      this._destroyTabComponent(previousTab);
+    }
+
     this.activeTab = tabId;
     const tabNav = this.container.querySelector('.tab-nav');
     tabNav.querySelectorAll('.tab-btn').forEach((btn, i) => {
@@ -208,11 +239,23 @@ export class ProjectDetail {
   async renderTerminalTab(container) {
     try {
       const { TerminalPanel } = await import('../terminal/TerminalPanel.js');
+      if (this._destroyed || this.activeTab !== 'terminal' || !container.isConnected) return;
       const isSSH = !!this.project.ssh_host;
-      this._terminalPanel = new TerminalPanel(this.projectId, this.project.path, { isSSH, project: this.project });
-      this._terminalEl = this._terminalPanel.render();
-      container.appendChild(this._terminalEl);
+      const panel = new TerminalPanel(this.projectId, this.project.path, { isSSH, project: this.project });
+      const el = panel.render();
+      if (this._destroyed || this.activeTab !== 'terminal' || !container.isConnected) {
+        try {
+          panel.destroy();
+        } catch (destroyError) {
+          console.warn('Failed to destroy stale terminal panel:', destroyError);
+        }
+        return;
+      }
+      this._terminalPanel = panel;
+      this._terminalEl = el;
+      container.appendChild(el);
     } catch (e) {
+      if (this._destroyed || this.activeTab !== 'terminal' || !container.isConnected) return;
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">🔧</div>
@@ -297,7 +340,9 @@ export class ProjectDetail {
     // Load activity
     try {
       const activities = await window.api.activity.list(this.projectId, 5);
+      if (this._destroyed || this.activeTab !== 'overview' || !container.isConnected) return;
       const activityEl = container.querySelector('.overview-activity');
+      if (!activityEl) return;
       if (!activities || activities.length === 0) {
         activityEl.innerHTML = `<p class="text-sm text-slate-500">No activity yet</p>`;
       } else {
@@ -316,6 +361,7 @@ export class ProjectDetail {
         });
       }
     } catch (e) {
+      if (this._destroyed) return;
       console.error('Failed to load activity:', e);
     }
   }
@@ -323,6 +369,7 @@ export class ProjectDetail {
   async renderTabPlaceholder(container, tabId, componentName) {
     // Dynamically load feature components
     try {
+      this._destroyTabComponent(tabId);
       let component;
       switch (tabId) {
         case 'todos': {
@@ -347,9 +394,19 @@ export class ProjectDetail {
         }
       }
       if (component) {
+        if (this._destroyed || this.activeTab !== tabId || !container.isConnected) {
+          try {
+            component.destroy?.();
+          } catch (destroyError) {
+            console.warn(`Failed to destroy stale ${tabId} tab component:`, destroyError);
+          }
+          return;
+        }
         container.appendChild(component.render());
+        this._tabComponents.set(tabId, component);
       }
     } catch (e) {
+      if (this._destroyed || this.activeTab !== tabId || !container.isConnected) return;
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">🔧</div>
@@ -358,6 +415,26 @@ export class ProjectDetail {
         </div>
       `;
     }
+  }
+
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    this._destroyAllTabComponents();
+    if (this._terminalPanel) {
+      try {
+        this._terminalPanel.destroy();
+      } catch (e) {
+        console.warn('Failed to destroy project terminal panel:', e);
+      }
+    }
+    if (this._terminalEl?.parentNode) {
+      this._terminalEl.parentNode.removeChild(this._terminalEl);
+    }
+    this._terminalPanel = null;
+    this._terminalEl = null;
+    this.container = null;
+    this.onNavigate = null;
   }
 
   statusLabel(status) {

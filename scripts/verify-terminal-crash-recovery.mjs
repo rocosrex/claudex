@@ -47,6 +47,8 @@ contains(stt, 'for (const callback of [...this._transcribedListeners])', 'STT se
 
 const terminalPanel = read('src/renderer/components/terminal/TerminalPanel.js');
 const multiTerminal = read('src/renderer/components/terminal/MultiTerminalView.js');
+const app = read('src/renderer/app.js');
+const projectDetail = read('src/renderer/components/project/ProjectDetail.js');
 
 contains(terminalPanel, 'this._destroyed = false', 'TerminalPanel must track destroy state');
 contains(terminalPanel, 'this._unsubscribeSttState = null', 'TerminalPanel must store STT state unsubscribe');
@@ -104,5 +106,20 @@ contains(multiTerminal, 'this._unsubscribeSttState?.()', 'Workbench must unsubsc
 contains(multiTerminal, 'this._unsubscribeSttTranscribed?.()', 'Workbench must unsubscribe STT transcription listener');
 contains(multiTerminal, "document.removeEventListener('click', this._onDocumentClick)", 'Workbench must remove document click listener on destroy');
 contains(multiTerminal, 'if (this._destroyed) return;\n    this._destroyed = true;', 'Workbench destroy must be idempotent');
+
+contains(app, 'this.currentViewInstance = null', 'App must track the current routed view instance');
+contains(app, 'destroyCurrentView()', 'App must centralize routed view destruction');
+contains(app, 'this.currentViewInstance?.destroy', 'App must destroy current routed views through optional destroy');
+contains(app, 'this.currentViewInstance = detail', 'App must own project detail view lifecycle');
+contains(app, 'this.currentViewInstance = dashboard', 'App must own dashboard view lifecycle');
+contains(app, 'this.currentViewInstance = null; // Workbench is intentionally persistent', 'App must leave Workbench persistent across navigation');
+
+contains(projectDetail, 'this._tabComponents = new Map()', 'ProjectDetail must track tab component lifecycles');
+contains(projectDetail, 'this._destroyed = false', 'ProjectDetail must track destroy state');
+contains(projectDetail, '_destroyTabComponent(tabId)', 'ProjectDetail must destroy individual tab components');
+contains(projectDetail, 'this._tabComponents.set(tabId, component)', 'ProjectDetail must store rendered tab components');
+contains(projectDetail, 'destroy() {', 'ProjectDetail must expose destroy lifecycle');
+contains(projectDetail, 'this._terminalPanel.destroy()', 'ProjectDetail destroy must tear down cached terminal panel');
+contains(projectDetail, 'if (this._destroyed) return;', 'ProjectDetail must guard async work after destroy');
 
 console.log('terminal crash recovery verification passed');

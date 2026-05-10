@@ -15,6 +15,10 @@ class App {
     this.mainContent = null;
     this.bottomPanel = null;
     this.multiTerminalView = null; // cached instance
+    this.currentViewInstance = null;
+    this.currentDocsEditor = null;
+    this.currentSTT = null;
+    this._navigationToken = 0;
     this.init();
   }
 
@@ -193,6 +197,21 @@ class App {
     }
   }
 
+  destroyCurrentView() {
+    try {
+      this.currentViewInstance?.destroy?.();
+    } catch (e) {
+      console.warn('Failed to destroy current view:', e);
+    }
+    this.currentViewInstance = null;
+    this.currentDocsEditor = null;
+    this.currentSTT = null;
+  }
+
+  isCurrentNavigation(token, view) {
+    return token === this._navigationToken && store.getState().currentView === view;
+  }
+
   navigate(view, params = {}) {
     // Remote files: always open in Workbench editor cells
     if (params.remote && (view === 'docs-editor' || view === 'pdf-viewer') && params.filePath) {
@@ -222,18 +241,8 @@ class App {
     }
 
     store.setState({ currentView: view, ...params });
-
-    // Destroy docs editor on navigation away
-    if (this.currentDocsEditor) {
-      this.currentDocsEditor.destroy();
-      this.currentDocsEditor = null;
-    }
-
-    // Destroy STT recorder on navigation away
-    if (this.currentSTT) {
-      this.currentSTT.destroy();
-      this.currentSTT = null;
-    }
+    const navigationToken = ++this._navigationToken;
+    this.destroyCurrentView();
 
     // Hide cached multi-terminal view (don't destroy)
     if (this.multiTerminalView && this.multiTerminalView.container) {
@@ -250,44 +259,48 @@ class App {
       case 'dashboard': {
         const dashboard = new DashboardView();
         dashboard.onNavigate = (v, p) => this.navigate(v, p);
+        this.currentViewInstance = dashboard;
         this.mainContent.appendChild(dashboard.render());
         break;
       }
       case 'project-detail': {
         const detail = new ProjectDetail(params.projectId || store.getState().selectedProjectId);
         detail.onNavigate = (v, p) => this.navigate(v, p);
+        this.currentViewInstance = detail;
         this.mainContent.appendChild(detail.render());
         break;
       }
       case 'kanban': {
-        this.loadKanban();
+        this.loadKanban(navigationToken);
         break;
       }
       case 'terminal': {
-        this.loadMultiTerminal();
+        this.currentViewInstance = null; // Workbench is intentionally persistent
+        this.loadMultiTerminal(navigationToken);
         break;
       }
       case 'stt': {
-        this.loadSTT();
+        this.loadSTT(navigationToken);
         break;
       }
       case 'docs-editor': {
-        this.loadDocsEditor(params);
+        this.loadDocsEditor(params, navigationToken);
         break;
       }
       case 'pdf-viewer': {
-        this.loadPdfViewer(params);
+        this.loadPdfViewer(params, navigationToken);
         break;
       }
       default: {
         const dashboard = new DashboardView();
         dashboard.onNavigate = (v, p) => this.navigate(v, p);
+        this.currentViewInstance = dashboard;
         this.mainContent.appendChild(dashboard.render());
       }
     }
   }
 
-  async loadMultiTerminal() {
+  async loadMultiTerminal(navigationToken = this._navigationToken) {
     try {
       // Reuse cached instance — don't destroy terminals on navigation
       if (this.multiTerminalView && this.multiTerminalView.container) {
@@ -301,9 +314,11 @@ class App {
       }
 
       const { MultiTerminalView } = await import('./components/terminal/MultiTerminalView.js');
+      if (!this.isCurrentNavigation(navigationToken, 'terminal')) return;
       this.multiTerminalView = new MultiTerminalView();
       this.mainContent.appendChild(this.multiTerminalView.render());
     } catch (e) {
+      if (!this.isCurrentNavigation(navigationToken, 'terminal')) return;
       this.mainContent.innerHTML = `
         <div class="empty-state h-full">
           <div class="empty-state-icon">🖥</div>
@@ -314,14 +329,10 @@ class App {
     }
   }
 
-  async loadDocsEditor(params) {
-    // Destroy previous docs editor if exists
-    if (this.currentDocsEditor) {
-      this.currentDocsEditor.destroy();
-      this.currentDocsEditor = null;
-    }
+  async loadDocsEditor(params, navigationToken = this._navigationToken) {
     try {
       const { DocsEditorView } = await import('./components/docs/DocsEditorView.js');
+      if (!this.isCurrentNavigation(navigationToken, 'docs-editor')) return;
       const editor = new DocsEditorView({
         projectId: params.projectId,
         filePath: params.filePath,
@@ -329,8 +340,10 @@ class App {
       });
       editor.onClose = () => this.navigate('project-detail', { projectId: params.projectId });
       this.currentDocsEditor = editor;
+      this.currentViewInstance = editor;
       this.mainContent.appendChild(editor.render());
     } catch (e) {
+      if (!this.isCurrentNavigation(navigationToken, 'docs-editor')) return;
       this.mainContent.innerHTML = `
         <div class="empty-state h-full">
           <div class="empty-state-icon">📄</div>
@@ -341,12 +354,13 @@ class App {
     }
   }
 
-  async loadPdfViewer(params) {
+  async loadPdfViewer(params, navigationToken = this._navigationToken) {
     try {
       const fileName = params.filePath.split('/').pop();
       const result = params.remote
         ? await window.api.remote.readBinary(params.projectId, params.filePath)
         : await window.api.files.readBinary(params.filePath);
+      if (!this.isCurrentNavigation(navigationToken, 'pdf-viewer')) return;
       if (result.error) throw new Error(result.error);
 
       const wrapper = document.createElement('div');
@@ -364,6 +378,10 @@ class App {
         else this.navigate('dashboard');
       });
 
+      const pdfView = {
+        destroy: () => wrapper.remove(),
+      };
+      this.currentViewInstance = pdfView;
       this.mainContent.appendChild(wrapper);
 
       const container = wrapper.querySelector('.flex-1');
@@ -372,8 +390,20 @@ class App {
       for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
 
       const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+      if (!this.isCurrentNavigation(navigationToken, 'pdf-viewer')) {
+        pdfView.destroy();
+        return;
+      }
       for (let i = 1; i <= pdf.numPages; i++) {
+        if (!this.isCurrentNavigation(navigationToken, 'pdf-viewer')) {
+          pdfView.destroy();
+          return;
+        }
         const page = await pdf.getPage(i);
+        if (!this.isCurrentNavigation(navigationToken, 'pdf-viewer')) {
+          pdfView.destroy();
+          return;
+        }
         const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
@@ -381,9 +411,14 @@ class App {
         canvas.style.maxWidth = '100%';
         canvas.style.borderRadius = '4px';
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        if (!this.isCurrentNavigation(navigationToken, 'pdf-viewer')) {
+          pdfView.destroy();
+          return;
+        }
         container.appendChild(canvas);
       }
     } catch (e) {
+      if (!this.isCurrentNavigation(navigationToken, 'pdf-viewer')) return;
       this.mainContent.innerHTML = `
         <div class="empty-state h-full">
           <div class="empty-state-icon">📕</div>
@@ -394,13 +429,15 @@ class App {
     }
   }
 
-  async loadSTT() {
+  async loadSTT(navigationToken = this._navigationToken) {
     try {
       const { STTRecorder } = await import('./components/stt/STTRecorder.js');
-      if (this.currentSTT) this.currentSTT.destroy();
+      if (!this.isCurrentNavigation(navigationToken, 'stt')) return;
       this.currentSTT = new STTRecorder();
+      this.currentViewInstance = this.currentSTT;
       this.mainContent.appendChild(this.currentSTT.render());
     } catch (e) {
+      if (!this.isCurrentNavigation(navigationToken, 'stt')) return;
       this.mainContent.innerHTML = `
         <div class="empty-state h-full">
           <div class="empty-state-icon">🎙️</div>
@@ -411,13 +448,16 @@ class App {
     }
   }
 
-  async loadKanban() {
+  async loadKanban(navigationToken = this._navigationToken) {
     try {
       const { KanbanBoard } = await import('./components/kanban/KanbanBoard.js');
+      if (!this.isCurrentNavigation(navigationToken, 'kanban')) return;
       const kanban = new KanbanBoard();
       kanban.onNavigate = (v, p) => this.navigate(v, p);
+      this.currentViewInstance = kanban;
       this.mainContent.appendChild(kanban.render());
     } catch (e) {
+      if (!this.isCurrentNavigation(navigationToken, 'kanban')) return;
       this.mainContent.innerHTML = `
         <div class="empty-state h-full">
           <div class="empty-state-icon">📋</div>
