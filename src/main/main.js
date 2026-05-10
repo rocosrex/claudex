@@ -14,6 +14,109 @@ const speakerManager = require('./speaker-manager');
 
 let mainWindow = null;
 
+const RENDERER_CRASH_WINDOW_MS = 30_000;
+const RENDERER_CRASH_LIMIT = 3;
+let rendererCrashTimestamps = [];
+
+function rendererRecoveryHtml(reason, exitCode) {
+  const safeReason = String(reason || 'unknown');
+  const safeExitCode = exitCode === undefined ? 'unknown' : String(exitCode);
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Claudex Recovery</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 560px;
+      padding: 32px;
+      text-align: center;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 22px;
+    }
+    p {
+      margin: 8px 0;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    code {
+      color: #c4b5fd;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Claudex renderer crashed</h1>
+    <p>The app stopped reloading because the renderer crashed repeatedly.</p>
+    <p>Restart Claudex to continue. The last reason was <code>${safeReason}</code> with exit code <code>${safeExitCode}</code>.</p>
+  </main>
+</body>
+</html>`;
+}
+
+function showRendererRecoveryPage(win, details) {
+  if (!win || win.isDestroyed()) return;
+  const html = rendererRecoveryHtml(details?.reason, details?.exitCode);
+  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`).catch((err) => {
+    console.error('[renderer-recovery] Failed to show recovery page:', err.message);
+  });
+}
+
+function recoverRenderer(win, details) {
+  if (!win || win.isDestroyed()) return;
+
+  const now = Date.now();
+  rendererCrashTimestamps = rendererCrashTimestamps
+    .filter((timestamp) => now - timestamp < RENDERER_CRASH_WINDOW_MS);
+  rendererCrashTimestamps.push(now);
+
+  console.error('[renderer-recovery] Renderer process gone:', details);
+
+  if (rendererCrashTimestamps.length >= RENDERER_CRASH_LIMIT) {
+    showRendererRecoveryPage(win, details);
+    return;
+  }
+
+  setTimeout(() => {
+    if (!win.isDestroyed()) {
+      win.reload();
+    }
+  }, 500);
+}
+
+function attachWindowRecoveryHandlers(win) {
+  win.webContents.on('render-process-gone', (_event, details) => {
+    const reason = details?.reason || 'unknown';
+    if (['crashed', 'oom', 'killed', 'integrity-failure'].includes(reason)) {
+      recoverRenderer(win, details);
+      return;
+    }
+    console.warn('[renderer-recovery] Renderer exited without auto-reload:', details);
+  });
+
+  win.webContents.on('unresponsive', () => {
+    console.warn('[renderer-recovery] Renderer became unresponsive');
+  });
+
+  if (process.env.NODE_ENV === 'development') {
+    win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+    });
+  }
+}
+
 // --- Window State ---
 
 const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
@@ -74,6 +177,7 @@ function createWindow() {
     app.dock.setIcon(iconPath);
   }
 
+  attachWindowRecoveryHandlers(mainWindow);
   mainWindow.loadFile(path.join(__dirname, '../../public/index.html'));
 
   // if (process.env.NODE_ENV === 'development') {

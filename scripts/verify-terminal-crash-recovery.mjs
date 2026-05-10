@@ -10,18 +10,16 @@ function read(relativePath) {
   return fs.readFileSync(absolutePath, 'utf8');
 }
 
-const files = [
-  'src/main/main.js',
-  'src/renderer/app.js',
-  'src/renderer/components/project/ProjectDetail.js',
-  'src/renderer/components/terminal/TerminalPanel.js',
-  'src/renderer/components/terminal/MultiTerminalView.js',
-  'src/renderer/utils/stt-service.js',
-];
-
-for (const file of files) {
-  const source = read(file);
-  assert.ok(source.length > 0, `${file} must not be empty`);
+function contains(source, needle, message) {
+  assert.ok(source.includes(needle), message);
 }
 
-console.log('terminal crash recovery verification harness is ready');
+const main = read('src/main/main.js');
+
+contains(main, 'render-process-gone', 'main process must detect renderer exits');
+contains(main, 'unresponsive', 'main process must log unresponsive renderers');
+contains(main, 'rendererCrashTimestamps', 'main process must track recent renderer crashes');
+contains(main, 'showRendererRecoveryPage', 'main process must have a recovery page path');
+contains(main, 'attachWindowRecoveryHandlers(mainWindow)', 'BrowserWindow must attach recovery handlers');
+
+console.log('terminal crash recovery verification passed');
