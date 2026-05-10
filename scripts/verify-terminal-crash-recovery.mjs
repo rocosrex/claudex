@@ -14,6 +14,10 @@ function contains(source, needle, message) {
   assert.ok(source.includes(needle), message);
 }
 
+function notContains(source, needle, message) {
+  assert.ok(!source.includes(needle), message);
+}
+
 function containsAtLeast(source, needle, count, message) {
   const actual = source.split(needle).length - 1;
   assert.ok(actual >= count, `${message} (found ${actual}, expected at least ${count})`);
@@ -113,6 +117,15 @@ contains(app, 'this.currentViewInstance?.destroy', 'App must destroy current rou
 contains(app, 'this.currentViewInstance = detail', 'App must own project detail view lifecycle');
 contains(app, 'this.currentViewInstance = dashboard', 'App must own dashboard view lifecycle');
 contains(app, 'this.currentViewInstance = null; // Workbench is intentionally persistent', 'App must leave Workbench persistent across navigation');
+contains(app, 'async openRemoteFileInWorkbench(view, params)', 'App must open remote files through an awaitable Workbench helper');
+contains(app, "const workbench = await this.navigate('terminal')", 'Remote Workbench opens must await terminal navigation');
+contains(app, "if (!workbench || !this.isCurrentNavigation(navigationToken, 'terminal')) return;", 'Remote Workbench opens must guard stale navigation before adding cells');
+contains(app, 'workbench.addEditorCell(params.filePath, params.projectId, { remote: true })', 'Remote docs files must open editor cells through the awaited Workbench');
+contains(app, 'workbench.addPdfCell(params.filePath, params.projectId, { remote: true })', 'Remote PDFs must open PDF cells through the awaited Workbench');
+contains(app, 'return this.loadMultiTerminal(navigationToken)', 'Terminal navigation must return the awaitable Workbench load');
+contains(app, 'return this.multiTerminalView', 'loadMultiTerminal must resolve with the Workbench instance');
+contains(app, "return null", 'loadMultiTerminal must return null when Workbench loading becomes stale or fails');
+notContains(app, 'requestAnimationFrame', 'Remote Workbench opens must not rely on requestAnimationFrame');
 
 contains(projectDetail, 'this._tabComponents = new Map()', 'ProjectDetail must track tab component lifecycles');
 contains(projectDetail, 'this._tabRenderGenerations = new Map()', 'ProjectDetail must track async tab render generations');

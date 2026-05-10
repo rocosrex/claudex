@@ -212,19 +212,22 @@ class App {
     return token === this._navigationToken && store.getState().currentView === view;
   }
 
-  navigate(view, params = {}) {
+  async openRemoteFileInWorkbench(view, params) {
+    const workbench = await this.navigate('terminal');
+    const navigationToken = this._navigationToken;
+    if (!workbench || !this.isCurrentNavigation(navigationToken, 'terminal')) return;
+
+    if (view === 'docs-editor') {
+      workbench.addEditorCell(params.filePath, params.projectId, { remote: true });
+    } else {
+      workbench.addPdfCell(params.filePath, params.projectId, { remote: true });
+    }
+  }
+
+  async navigate(view, params = {}) {
     // Remote files: always open in Workbench editor cells
     if (params.remote && (view === 'docs-editor' || view === 'pdf-viewer') && params.filePath) {
-      // Switch to terminal/workbench view, then open cell
-      this.navigate('terminal');
-      requestAnimationFrame(() => {
-        if (view === 'docs-editor') {
-          this.multiTerminalView.addEditorCell(params.filePath, params.projectId, { remote: true });
-        } else {
-          this.multiTerminalView.addPdfCell(params.filePath, params.projectId, { remote: true });
-        }
-      });
-      return;
+      return this.openRemoteFileInWorkbench(view, params);
     }
 
     // Intercept file opens when MultiTerminalView is active
@@ -276,8 +279,7 @@ class App {
       }
       case 'terminal': {
         this.currentViewInstance = null; // Workbench is intentionally persistent
-        this.loadMultiTerminal(navigationToken);
-        break;
+        return this.loadMultiTerminal(navigationToken);
       }
       case 'stt': {
         this.loadSTT(navigationToken);
@@ -302,6 +304,7 @@ class App {
 
   async loadMultiTerminal(navigationToken = this._navigationToken) {
     try {
+      if (!this.isCurrentNavigation(navigationToken, 'terminal')) return null;
       // Reuse cached instance — don't destroy terminals on navigation
       if (this.multiTerminalView && this.multiTerminalView.container) {
         this.multiTerminalView.container.style.display = '';
@@ -310,15 +313,16 @@ class App {
         }
         // Refit all terminals after re-show
         this.multiTerminalView.updateGridLayout();
-        return;
+        return this.multiTerminalView;
       }
 
       const { MultiTerminalView } = await import('./components/terminal/MultiTerminalView.js');
-      if (!this.isCurrentNavigation(navigationToken, 'terminal')) return;
+      if (!this.isCurrentNavigation(navigationToken, 'terminal')) return null;
       this.multiTerminalView = new MultiTerminalView();
       this.mainContent.appendChild(this.multiTerminalView.render());
+      return this.multiTerminalView;
     } catch (e) {
-      if (!this.isCurrentNavigation(navigationToken, 'terminal')) return;
+      if (!this.isCurrentNavigation(navigationToken, 'terminal')) return null;
       this.mainContent.innerHTML = `
         <div class="empty-state h-full">
           <div class="empty-state-icon">🖥</div>
@@ -326,6 +330,7 @@ class App {
           <p class="text-sm text-slate-500 mt-1">${e.message || ''}</p>
         </div>
       `;
+      return null;
     }
   }
 
