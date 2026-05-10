@@ -103,7 +103,13 @@ export class TerminalPanel {
 
   // --- Terminal creation ---
   async createTerminalSession(runClaude = false) {
+    if (this._destroyed) return;
     const result = await window.api.terminal.create(this.projectId, this.projectPath);
+    if (this._destroyed && result.termId) {
+      await window.api.terminal.close(result.termId);
+    }
+    if (this._destroyed) return;
+
     if (result.error) {
       Toast.show(`Failed to create terminal: ${result.error}`, 'error');
       return;
@@ -199,6 +205,7 @@ export class TerminalPanel {
     // Run Claude Code
     if (runClaude) {
       setTimeout(() => {
+        if (this._destroyed) return;
         window.api.terminal.runClaude(termId);
       }, 500);
     }
@@ -251,10 +258,8 @@ export class TerminalPanel {
     tab.wrapper.style.display = '';
 
     requestAnimationFrame(() => {
-      try {
-        tab.fitAddon.fit();
-        tab.term.focus();
-      } catch (e) { /* ignore */ }
+      this.fitTab(tab);
+      try { tab.term.focus(); } catch (e) { /* ignore */ }
     });
 
     this.termId = tab.termId;
@@ -342,6 +347,7 @@ export class TerminalPanel {
       : '';
     if (startupCmd) {
       setTimeout(() => {
+        if (this._destroyed) return;
         window.api.terminal.input(this.termId, startupCmd + '\r');
       }, 500);
     }
@@ -349,7 +355,13 @@ export class TerminalPanel {
 
   // --- SSH Terminal ---
   async createSSHSession(projectId, sshConfig) {
+    if (this._destroyed) return;
     const result = await window.api.terminal.createSSH(projectId, sshConfig);
+    if (this._destroyed && result.termId) {
+      await window.api.terminal.close(result.termId);
+    }
+    if (this._destroyed) return;
+
     if (result.error) {
       Toast.show(`SSH connection failed: ${result.error}`, 'error');
       return;

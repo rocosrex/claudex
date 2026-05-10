@@ -14,6 +14,11 @@ function contains(source, needle, message) {
   assert.ok(source.includes(needle), message);
 }
 
+function containsAtLeast(source, needle, count, message) {
+  const actual = source.split(needle).length - 1;
+  assert.ok(actual >= count, `${message} (found ${actual}, expected at least ${count})`);
+}
+
 const main = read('src/main/main.js');
 
 contains(main, 'render-process-gone', 'main process must detect renderer exits');
@@ -51,6 +56,13 @@ contains(terminalPanel, 'fitActiveTab()', 'TerminalPanel must fit terminals thro
 contains(terminalPanel, 'if (this._destroyed) return', 'TerminalPanel destroy must be idempotent');
 contains(terminalPanel, 'this._unsubscribeSttState?.()', 'TerminalPanel must unsubscribe STT state listener');
 contains(terminalPanel, 'this._unsubscribeSttTranscribed?.()', 'TerminalPanel must unsubscribe STT transcription listener');
+contains(terminalPanel, 'if (this._destroyed) return;\n    const result = await window.api.terminal.create(this.projectId, this.projectPath);', 'TerminalPanel must skip local terminal creation after destroy');
+contains(terminalPanel, 'if (this._destroyed) return;\n    const result = await window.api.terminal.createSSH(projectId, sshConfig);', 'TerminalPanel must skip SSH terminal creation after destroy');
+containsAtLeast(terminalPanel, 'this._destroyed && result.termId', 2, 'TerminalPanel must detect backend terminals created after destroy');
+containsAtLeast(terminalPanel, 'window.api.terminal.close(result.termId)', 2, 'TerminalPanel must close backend terminals created after destroy');
+contains(terminalPanel, 'if (this._destroyed) return;\n        window.api.terminal.runClaude(termId);', 'TerminalPanel delayed Claude run must skip after destroy');
+contains(terminalPanel, "if (this._destroyed) return;\n        window.api.terminal.input(this.termId, startupCmd + '\\r');", 'TerminalPanel delayed SSH startup input must skip after destroy');
+contains(terminalPanel, 'this.fitTab(tab);', 'TerminalPanel tab switching must resize backend through fit helper');
 
 contains(multiTerminal, 'this._unsubscribeSttState = null', 'Workbench must store STT state unsubscribe');
 contains(multiTerminal, 'this._unsubscribeSttTranscribed = null', 'Workbench must store STT transcription unsubscribe');
