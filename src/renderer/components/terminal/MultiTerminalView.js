@@ -204,6 +204,19 @@ export class MultiTerminalView {
     this.createCell(result.termId, title, { autoTmux: false, startupCommand });
   }
 
+  _hasTerminalCell(termId) {
+    return this.cells.some(cell => cell.type === 'terminal' && cell.termId === termId);
+  }
+
+  async _sendStartupInput(termId, data) {
+    if (this._destroyed || !this._hasTerminalCell(termId)) return;
+    try {
+      await window.api.terminal.input(termId, data);
+    } catch (e) {
+      console.warn('Workbench delayed startup input failed', e);
+    }
+  }
+
   createCell(termId, title, options = {}) {
     const grid = this.container.querySelector('.multi-terminal-grid');
 
@@ -295,17 +308,18 @@ export class MultiTerminalView {
       // Auto-start tmux (local terminals only), then startup command
       if (options.autoTmux) {
         setTimeout(() => {
-          window.api.terminal.input(termId, 'tmux new-session\r');
+          if (this._destroyed || !this._hasTerminalCell(termId)) return;
+          this._sendStartupInput(termId, 'tmux new-session\r');
           if (options.startupCommand) {
             setTimeout(() => {
-              window.api.terminal.input(termId, options.startupCommand + '\r');
+              this._sendStartupInput(termId, options.startupCommand + '\r');
             }, 1000);
           }
         }, 300);
       } else if (options.startupCommand) {
         // SSH terminals: send startup command directly (no tmux)
         setTimeout(() => {
-          window.api.terminal.input(termId, options.startupCommand + '\r');
+          this._sendStartupInput(termId, options.startupCommand + '\r');
         }, 500);
       }
     });

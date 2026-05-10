@@ -72,9 +72,15 @@ contains(multiTerminal, 'this._unsubscribeSttState = null', 'Workbench must stor
 contains(multiTerminal, 'this._unsubscribeSttTranscribed = null', 'Workbench must store STT transcription unsubscribe');
 contains(multiTerminal, 'this._onDocumentClick = null', 'Workbench must store document click cleanup');
 contains(multiTerminal, 'this._destroyed = false', 'Workbench must track destroy state');
+contains(multiTerminal, '_hasTerminalCell(termId)', 'Workbench must provide a live terminal cell helper');
 contains(multiTerminal, 'if (this._destroyed) return', 'Workbench must guard async work after destroy');
 containsAtLeast(multiTerminal, 'if (this._destroyed && result.termId)', 2, 'Workbench must detect backend terminals created after destroy');
 containsAtLeast(multiTerminal, 'window.api.terminal.close(result.termId)', 2, 'Workbench must close backend terminals created after destroy');
+contains(multiTerminal, 'async _sendStartupInput(termId, data)', 'Workbench delayed startup input must use a guarded helper');
+contains(multiTerminal, 'if (this._destroyed || !this._hasTerminalCell(termId)) return;', 'Workbench delayed startup input must guard destroyed and removed terminal cells');
+contains(multiTerminal, 'await window.api.terminal.input(termId, data)', 'Workbench delayed startup input must await terminal input');
+contains(multiTerminal, "console.warn('Workbench delayed startup input failed', e)", 'Workbench delayed startup input failures must be logged');
+containsAtLeast(multiTerminal, 'this._sendStartupInput(termId,', 3, 'Workbench delayed startup timers must use the guarded input helper');
 contains(multiTerminal, 'this._unsubscribeSttState?.()', 'Workbench must unsubscribe STT state listener');
 contains(multiTerminal, 'this._unsubscribeSttTranscribed?.()', 'Workbench must unsubscribe STT transcription listener');
 contains(multiTerminal, "document.removeEventListener('click', this._onDocumentClick)", 'Workbench must remove document click listener on destroy');
