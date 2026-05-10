@@ -120,11 +120,11 @@ function recoverRenderer(win, details) {
 function attachWindowRecoveryHandlers(win) {
   win.webContents.on('render-process-gone', (_event, details) => {
     const reason = details?.reason || 'unknown';
-    if (['crashed', 'oom', 'killed', 'integrity-failure'].includes(reason)) {
-      recoverRenderer(win, details);
+    if (reason === 'clean-exit') {
+      console.warn('[renderer-recovery] Renderer exited cleanly without auto-reload:', details);
       return;
     }
-    console.warn('[renderer-recovery] Renderer exited without auto-reload:', details);
+    recoverRenderer(win, details);
   });
 
   win.webContents.on('unresponsive', () => {

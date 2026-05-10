@@ -306,6 +306,7 @@ export class TerminalPanel {
       if (placeholder) placeholder.style.display = 'flex';
       this.termId = null;
       this.terminal = null;
+      this.fitAddon = null;
     } else {
       const activeTabIndex = currentActiveTab && currentActiveTab !== tab && !currentActiveTab.closing
         ? this.tabs.indexOf(currentActiveTab)
@@ -335,11 +336,17 @@ export class TerminalPanel {
       }
     });
 
-    this.container.querySelector('.btn-run-claude').addEventListener('click', () => {
+    this.container.querySelector('.btn-run-claude').addEventListener('click', async () => {
       if (this.isSSH) {
         this._createSSHSessionFromProject(true);
       } else if (this.termId && this.terminal) {
-        window.api.terminal.runClaude(this.termId);
+        const termId = this.termId;
+        if (!this._hasTab(termId)) return;
+        try {
+          await window.api.terminal.runClaude(termId);
+        } catch (e) {
+          console.warn('Terminal Run Claude failed', e);
+        }
       } else {
         this.createAndRunClaude();
       }

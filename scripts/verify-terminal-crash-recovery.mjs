@@ -38,6 +38,9 @@ contains(main, 'lastRendererCrashDetails', 'main process must store last recover
 contains(main, 'if (rendererRecoveryShown)', 'createWindow must branch for recovery mode');
 contains(main, "reason: 'recovery-mode'", 'recreated recovery windows must have fallback recovery details');
 contains(main, 'showRendererRecoveryPage(mainWindow', 'createWindow must load recovery page during recovery mode');
+contains(main, "if (reason === 'clean-exit')", 'main process must only skip recovery for clean renderer exits');
+contains(main, 'recoverRenderer(win, details);\n  });', 'main process must recover non-clean renderer exits');
+notContains(main, 'Renderer exited without auto-reload', 'main process must not leave non-clean renderer exits unrecovered');
 
 const stt = read('src/renderer/utils/stt-service.js');
 
@@ -81,6 +84,10 @@ contains(terminalPanel, '!currentActiveTab.closing', 'TerminalPanel closeTab mus
 contains(terminalPanel, 'findIndex(candidate => !candidate.closing)', 'TerminalPanel closeTab must choose a live fallback tab');
 contains(terminalPanel, 'await window.api.terminal.runClaude(termId)', 'TerminalPanel delayed Claude run must use the captured termId');
 contains(terminalPanel, 'try {\n          await window.api.terminal.runClaude(termId);\n        } catch (e) {', 'TerminalPanel delayed Claude run rejection must be caught');
+contains(terminalPanel, "addEventListener('click', async () => {", 'TerminalPanel Run Claude button must handle async invoke rejections');
+contains(terminalPanel, 'const termId = this.termId;\n        if (!this._hasTab(termId)) return;', 'TerminalPanel Run Claude button must capture and verify active termId');
+contains(terminalPanel, "console.warn('Terminal Run Claude failed', e)", 'TerminalPanel Run Claude button must catch invoke rejections');
+containsAtLeast(terminalPanel, 'this.fitAddon = null', 4, 'TerminalPanel must clear stale fitAddon references when terminals are gone');
 contains(terminalPanel, "window.api.terminal.input(termId, startupCmd + '\\r')", 'TerminalPanel delayed SSH startup input must use the captured termId');
 contains(terminalPanel, "const termId = await this.createSSHSession(this.projectId, sshConfig)", 'TerminalPanel SSH startup must capture the created termId');
 contains(terminalPanel, 'this.fitTab(tab);', 'TerminalPanel tab switching must resize backend through fit helper');
