@@ -280,11 +280,19 @@ export class TerminalPanel {
     const tab = this.tabs[index];
     if (!tab || tab.closing) return;
     tab.closing = true;
+    const activeTab = this.tabs[this.activeTabIndex];
     terminalRouter.unregister(tab.termId);
-    await window.api.terminal.close(tab.termId);
+    try {
+      await window.api.terminal.close(tab.termId);
+    } catch (e) {
+      console.warn('Terminal close failed', e);
+    }
+
+    const tabIndex = this.tabs.indexOf(tab);
+    if (tabIndex === -1) return;
     tab.term.dispose();
     if (tab.wrapper.parentNode) tab.wrapper.parentNode.removeChild(tab.wrapper);
-    this.tabs.splice(index, 1);
+    this.tabs.splice(tabIndex, 1);
 
     if (this.tabs.length === 0) {
       const placeholder = this.container.querySelector('.terminal-placeholder');
@@ -292,7 +300,12 @@ export class TerminalPanel {
       this.termId = null;
       this.terminal = null;
     } else {
-      this.activeTabIndex = Math.min(this.activeTabIndex, this.tabs.length - 1);
+      const activeTabIndex = activeTab && activeTab !== tab
+        ? this.tabs.indexOf(activeTab)
+        : -1;
+      this.activeTabIndex = activeTabIndex !== -1
+        ? activeTabIndex
+        : Math.min(tabIndex, this.tabs.length - 1);
       this.switchTab(this.activeTabIndex);
     }
     this.renderTabs();

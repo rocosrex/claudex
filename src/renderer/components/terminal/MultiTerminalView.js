@@ -333,16 +333,24 @@ export class MultiTerminalView {
 
     if (cellData.type === 'terminal') {
       terminalRouter.unregister(cellData.termId);
-      await window.api.terminal.close(cellData.termId);
-      cellData.term.dispose();
+      try {
+        await window.api.terminal.close(cellData.termId);
+      } catch (e) {
+        console.warn('Workbench terminal close failed', e);
+      }
     } else if (cellData.type === 'editor') {
       if (cellData.saveTimeout) clearTimeout(cellData.saveTimeout);
       if (cellData.keyHandler) document.removeEventListener('keydown', cellData.keyHandler);
     }
     // pdf: no extra cleanup needed
 
+    const cellIndex = this.cells.indexOf(cellData);
+    if (cellIndex === -1) return;
+    if (cellData.type === 'terminal') {
+      cellData.term.dispose();
+    }
     if (cellData.cellEl.parentNode) cellData.cellEl.remove();
-    this.cells.splice(index, 1);
+    this.cells.splice(cellIndex, 1);
 
     this.updateGridLayout();
 

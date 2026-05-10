@@ -65,6 +65,8 @@ contains(terminalPanel, 'tab.termId === termId && !tab.closing', 'TerminalPanel 
 containsAtLeast(terminalPanel, 'this._hasTab(termId)', 2, 'TerminalPanel delayed commands must verify the target tab still exists');
 contains(terminalPanel, 'if (!tab || tab.closing) return;', 'TerminalPanel closeTab must be idempotent for closing tabs');
 contains(terminalPanel, 'tab.closing = true;', 'TerminalPanel closeTab must mark tabs closing before awaiting backend close');
+contains(terminalPanel, 'const tabIndex = this.tabs.indexOf(tab);', 'TerminalPanel closeTab must recompute tab index by identity after close');
+contains(terminalPanel, 'this.tabs.splice(tabIndex, 1);', 'TerminalPanel closeTab must remove the closed tab by identity');
 contains(terminalPanel, 'await window.api.terminal.runClaude(termId)', 'TerminalPanel delayed Claude run must use the captured termId');
 contains(terminalPanel, 'try {\n          await window.api.terminal.runClaude(termId);\n        } catch (e) {', 'TerminalPanel delayed Claude run rejection must be caught');
 contains(terminalPanel, "window.api.terminal.input(termId, startupCmd + '\\r')", 'TerminalPanel delayed SSH startup input must use the captured termId');
@@ -87,6 +89,8 @@ contains(multiTerminal, "console.warn('Workbench delayed startup input failed', 
 containsAtLeast(multiTerminal, 'this._sendStartupInput(termId,', 3, 'Workbench delayed startup timers must use the guarded input helper');
 contains(multiTerminal, 'if (cellData.closing) return;', 'Workbench removeCell must be idempotent for closing cells');
 contains(multiTerminal, 'cellData.closing = true;', 'Workbench removeCell must mark cells closing before awaiting backend close');
+contains(multiTerminal, 'const cellIndex = this.cells.indexOf(cellData);', 'Workbench removeCell must recompute cell index by identity after close');
+contains(multiTerminal, 'this.cells.splice(cellIndex, 1);', 'Workbench removeCell must remove the closed cell by identity');
 contains(multiTerminal, 'this._unsubscribeSttState?.()', 'Workbench must unsubscribe STT state listener');
 contains(multiTerminal, 'this._unsubscribeSttTranscribed?.()', 'Workbench must unsubscribe STT transcription listener');
 contains(multiTerminal, "document.removeEventListener('click', this._onDocumentClick)", 'Workbench must remove document click listener on destroy');
