@@ -40,4 +40,23 @@ contains(stt, 'try {\n      callback(this.state);\n    } catch (e) {', 'STT init
 contains(stt, 'for (const callback of [...this._stateListeners])', 'STT service must notify all state listeners safely');
 contains(stt, 'for (const callback of [...this._transcribedListeners])', 'STT service must notify all transcription listeners safely');
 
+const terminalPanel = read('src/renderer/components/terminal/TerminalPanel.js');
+const multiTerminal = read('src/renderer/components/terminal/MultiTerminalView.js');
+
+contains(terminalPanel, 'this._destroyed = false', 'TerminalPanel must track destroy state');
+contains(terminalPanel, 'this._unsubscribeSttState = null', 'TerminalPanel must store STT state unsubscribe');
+contains(terminalPanel, 'this._unsubscribeSttTranscribed = null', 'TerminalPanel must store STT transcription unsubscribe');
+contains(terminalPanel, 'setupResizeObserver()', 'TerminalPanel must centralize resize observer setup');
+contains(terminalPanel, 'fitActiveTab()', 'TerminalPanel must fit terminals through one active-tab helper');
+contains(terminalPanel, 'if (this._destroyed) return', 'TerminalPanel destroy must be idempotent');
+contains(terminalPanel, 'this._unsubscribeSttState?.()', 'TerminalPanel must unsubscribe STT state listener');
+contains(terminalPanel, 'this._unsubscribeSttTranscribed?.()', 'TerminalPanel must unsubscribe STT transcription listener');
+
+contains(multiTerminal, 'this._unsubscribeSttState = null', 'Workbench must store STT state unsubscribe');
+contains(multiTerminal, 'this._unsubscribeSttTranscribed = null', 'Workbench must store STT transcription unsubscribe');
+contains(multiTerminal, 'this._onDocumentClick = null', 'Workbench must store document click cleanup');
+contains(multiTerminal, 'this._unsubscribeSttState?.()', 'Workbench must unsubscribe STT state listener');
+contains(multiTerminal, 'this._unsubscribeSttTranscribed?.()', 'Workbench must unsubscribe STT transcription listener');
+contains(multiTerminal, "document.removeEventListener('click', this._onDocumentClick)", 'Workbench must remove document click listener on destroy');
+
 console.log('terminal crash recovery verification passed');

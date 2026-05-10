@@ -25,6 +25,10 @@ export class TerminalPanel {
     this.fitAddon = null;
     this.tabs = [];        // Manage multiple terminal sessions
     this.activeTabIndex = 0;
+    this.resizeObserver = null;
+    this._destroyed = false;
+    this._unsubscribeSttState = null;
+    this._unsubscribeSttTranscribed = null;
   }
 
   render() {
@@ -71,6 +75,30 @@ export class TerminalPanel {
     }
 
     return container;
+  }
+
+  setupResizeObserver() {
+    if (this.resizeObserver) return;
+    const termContainer = this.container.querySelector('.terminal-container');
+    this.resizeObserver = new ResizeObserver(() => this.fitActiveTab());
+    this.resizeObserver.observe(termContainer);
+  }
+
+  fitTab(tab) {
+    if (!tab) return;
+    try {
+      tab.fitAddon.fit();
+      const dims = tab.fitAddon.proposeDimensions();
+      if (dims && dims.cols > 0 && dims.rows > 0) {
+        window.api.terminal.resize(tab.termId, dims.cols, dims.rows);
+      }
+    } catch (e) {
+      // Ignore fit errors from detached or hidden terminals.
+    }
+  }
+
+  fitActiveTab() {
+    this.fitTab(this.tabs[this.activeTabIndex]);
   }
 
   // --- Terminal creation ---
@@ -166,16 +194,7 @@ export class TerminalPanel {
     term.focus();
 
     // Resize handling
-    this.resizeObserver = new ResizeObserver(() => {
-      try {
-        fitAddon.fit();
-        const dims = fitAddon.proposeDimensions();
-        if (dims && dims.cols > 0 && dims.rows > 0) {
-          window.api.terminal.resize(termId, dims.cols, dims.rows);
-        }
-      } catch (e) { /* ignore */ }
-    });
-    this.resizeObserver.observe(termContainer);
+    this.setupResizeObserver();
 
     // Run Claude Code
     if (runClaude) {
@@ -404,20 +423,7 @@ export class TerminalPanel {
 
     term.focus();
 
-    if (!this.resizeObserver) {
-      this.resizeObserver = new ResizeObserver(() => {
-        const activeTab = this.tabs[this.activeTabIndex];
-        if (!activeTab) return;
-        try {
-          activeTab.fitAddon.fit();
-          const dims = activeTab.fitAddon.proposeDimensions();
-          if (dims && dims.cols > 0 && dims.rows > 0) {
-            window.api.terminal.resize(activeTab.termId, dims.cols, dims.rows);
-          }
-        } catch (e) { /* ignore */ }
-      });
-      this.resizeObserver.observe(termContainer);
-    }
+    this.setupResizeObserver();
 
     this.termId = termId;
     this.terminal = term;
@@ -432,7 +438,7 @@ export class TerminalPanel {
     body.appendChild(this.sttIndicator.render());
 
     // STT state change → update indicator and button
-    sttService.onStateChange((state) => {
+    this._unsubscribeSttState = sttService.onStateChange((state) => {
       this.sttIndicator.update(state);
       const btn = this.container.querySelector('.btn-stt-toggle');
       if (btn) {
@@ -445,7 +451,7 @@ export class TerminalPanel {
     });
 
     // STT transcribed → insert into active terminal
-    sttService.onTranscribed((text) => {
+    this._unsubscribeSttTranscribed = sttService.onTranscribed((text) => {
       if (this.termId) {
         window.api.terminal.input(this.termId, text);
       }
@@ -477,14 +483,33 @@ export class TerminalPanel {
 
   // --- Cleanup ---
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
-    if (this.resizeObserver) this.resizeObserver.disconnect();
-    if (this.sttIndicator) this.sttIndicator.destroy();
-    this.tabs.forEach(tab => {
+    this._unsubscribeSttState?.();
+    this._unsubscribeSttTranscribed?.();
+    this._unsubscribeSttState = null;
+    this._unsubscribeSttTranscribed = null;
+
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+    if (this.sttIndicator) {
+      this.sttIndicator.destroy();
+      this.sttIndicator = null;
+    }
+
+    for (const tab of [...this.tabs]) {
       terminalRouter.unregister(tab.termId);
       window.api.terminal.close(tab.termId);
       tab.term.dispose();
-    });
+      if (tab.wrapper.parentNode) tab.wrapper.parentNode.removeChild(tab.wrapper);
+    }
     this.tabs = [];
+    this.termId = null;
+    this.terminal = null;
+    this.fitAddon = null;
   }
 }

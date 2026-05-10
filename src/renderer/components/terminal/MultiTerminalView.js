@@ -14,6 +14,9 @@ export class MultiTerminalView {
     this.cells = []; // { termId, term, fitAddon, cellEl, projectName }
     this.dragSourceIndex = -1;
     this.resizeObserver = null;
+    this._unsubscribeSttState = null;
+    this._unsubscribeSttTranscribed = null;
+    this._onDocumentClick = null;
   }
 
   render() {
@@ -67,9 +70,12 @@ export class MultiTerminalView {
       menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
     });
 
-    document.addEventListener('click', () => {
-      menu.style.display = 'none';
-    });
+    this._onDocumentClick = () => {
+      if (this.container && this.container.isConnected) {
+        menu.style.display = 'none';
+      }
+    };
+    document.addEventListener('click', this._onDocumentClick);
 
     menu.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -587,7 +593,7 @@ export class MultiTerminalView {
     grid.appendChild(this.sttIndicator.render());
 
     // State change → update indicator and button
-    sttService.onStateChange((state) => {
+    this._unsubscribeSttState = sttService.onStateChange((state) => {
       this.sttIndicator.update(state);
       const btn = this.container.querySelector('.btn-stt-toggle');
       if (btn) {
@@ -605,7 +611,7 @@ export class MultiTerminalView {
     });
 
     // Transcribed → insert into the last focused terminal cell
-    sttService.onTranscribed((text) => {
+    this._unsubscribeSttTranscribed = sttService.onTranscribed((text) => {
       // Find the last terminal cell that has focus, or the last one
       const termCells = this.cells.filter(c => c.type === 'terminal');
       if (termCells.length === 0) return;
@@ -621,6 +627,16 @@ export class MultiTerminalView {
   // --- Cleanup ---
   destroy() {
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
+    this._unsubscribeSttState?.();
+    this._unsubscribeSttTranscribed?.();
+    this._unsubscribeSttState = null;
+    this._unsubscribeSttTranscribed = null;
+
+    if (this._onDocumentClick) {
+      document.removeEventListener('click', this._onDocumentClick);
+      this._onDocumentClick = null;
+    }
+
     if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.sttIndicator) this.sttIndicator.destroy();
     this.cells.forEach(cell => {
