@@ -115,11 +115,21 @@ contains(app, 'this.currentViewInstance = dashboard', 'App must own dashboard vi
 contains(app, 'this.currentViewInstance = null; // Workbench is intentionally persistent', 'App must leave Workbench persistent across navigation');
 
 contains(projectDetail, 'this._tabComponents = new Map()', 'ProjectDetail must track tab component lifecycles');
+contains(projectDetail, 'this._tabRenderGenerations = new Map()', 'ProjectDetail must track async tab render generations');
 contains(projectDetail, 'this._destroyed = false', 'ProjectDetail must track destroy state');
 contains(projectDetail, '_destroyTabComponent(tabId)', 'ProjectDetail must destroy individual tab components');
 contains(projectDetail, 'this._tabComponents.set(tabId, component)', 'ProjectDetail must store rendered tab components');
 contains(projectDetail, 'destroy() {', 'ProjectDetail must expose destroy lifecycle');
 contains(projectDetail, 'this._terminalPanel.destroy()', 'ProjectDetail destroy must tear down cached terminal panel');
 contains(projectDetail, 'if (this._destroyed) return;', 'ProjectDetail must guard async work after destroy');
+contains(projectDetail, '_nextTabRenderGeneration(tabId)', 'ProjectDetail must issue per-tab render generations');
+contains(projectDetail, '_isCurrentTabRender(tabId, renderGeneration, container)', 'ProjectDetail must centralize stale async tab checks');
+contains(projectDetail, 'const renderGeneration = this._nextTabRenderGeneration(tabId)', 'ProjectDetail must create a generation for each tab render');
+contains(projectDetail, "this.renderTerminalTab(content, renderGeneration)", 'ProjectDetail terminal tab must capture render generation');
+contains(projectDetail, "this.renderTabPlaceholder(content, 'todos', 'TodoList', renderGeneration)", 'ProjectDetail todos tab must capture render generation');
+contains(projectDetail, "this.renderTabPlaceholder(content, 'notes', 'NoteList', renderGeneration)", 'ProjectDetail notes tab must capture render generation');
+contains(projectDetail, "this.renderTabPlaceholder(content, 'timer', 'TimeTracker', renderGeneration)", 'ProjectDetail timer tab must capture render generation');
+containsAtLeast(projectDetail, "_isCurrentTabRender('terminal', renderGeneration, container)", 3, 'ProjectDetail terminal async render must reject stale continuations');
+containsAtLeast(projectDetail, '_isCurrentTabRender(tabId, renderGeneration, container)', 5, 'ProjectDetail dynamic tab async renders must reject stale continuations');
 
 console.log('terminal crash recovery verification passed');

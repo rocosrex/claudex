@@ -13,6 +13,7 @@ export class ProjectDetail {
     this.activeTab = 'overview';
     this.onNavigate = null; // set by App
     this._tabComponents = new Map();
+    this._tabRenderGenerations = new Map();
     this._terminalPanel = null;
     this._terminalEl = null;
     this._destroyed = false;
@@ -187,6 +188,19 @@ export class ProjectDetail {
     }
   }
 
+  _nextTabRenderGeneration(tabId) {
+    const nextGeneration = (this._tabRenderGenerations.get(tabId) || 0) + 1;
+    this._tabRenderGenerations.set(tabId, nextGeneration);
+    return nextGeneration;
+  }
+
+  _isCurrentTabRender(tabId, renderGeneration, container) {
+    return !this._destroyed &&
+      this.activeTab === tabId &&
+      this._tabRenderGenerations.get(tabId) === renderGeneration &&
+      container.isConnected;
+  }
+
   showTab(tabId) {
     if (this._destroyed || !this.container) return;
     const previousTab = this.activeTab;
@@ -216,34 +230,35 @@ export class ProjectDetail {
     }
 
     content.innerHTML = '';
+    const renderGeneration = this._nextTabRenderGeneration(tabId);
 
     switch (tabId) {
       case 'overview':
         this.renderOverview(content);
         break;
       case 'todos':
-        this.renderTabPlaceholder(content, 'todos', 'TodoList');
+        this.renderTabPlaceholder(content, 'todos', 'TodoList', renderGeneration);
         break;
       case 'notes':
-        this.renderTabPlaceholder(content, 'notes', 'NoteList');
+        this.renderTabPlaceholder(content, 'notes', 'NoteList', renderGeneration);
         break;
       case 'timer':
-        this.renderTabPlaceholder(content, 'timer', 'TimeTracker');
+        this.renderTabPlaceholder(content, 'timer', 'TimeTracker', renderGeneration);
         break;
       case 'terminal':
-        this.renderTerminalTab(content);
+        this.renderTerminalTab(content, renderGeneration);
         break;
     }
   }
 
-  async renderTerminalTab(container) {
+  async renderTerminalTab(container, renderGeneration) {
     try {
       const { TerminalPanel } = await import('../terminal/TerminalPanel.js');
-      if (this._destroyed || this.activeTab !== 'terminal' || !container.isConnected) return;
+      if (!this._isCurrentTabRender('terminal', renderGeneration, container)) return;
       const isSSH = !!this.project.ssh_host;
       const panel = new TerminalPanel(this.projectId, this.project.path, { isSSH, project: this.project });
       const el = panel.render();
-      if (this._destroyed || this.activeTab !== 'terminal' || !container.isConnected) {
+      if (!this._isCurrentTabRender('terminal', renderGeneration, container)) {
         try {
           panel.destroy();
         } catch (destroyError) {
@@ -255,7 +270,7 @@ export class ProjectDetail {
       this._terminalEl = el;
       container.appendChild(el);
     } catch (e) {
-      if (this._destroyed || this.activeTab !== 'terminal' || !container.isConnected) return;
+      if (!this._isCurrentTabRender('terminal', renderGeneration, container)) return;
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">🔧</div>
@@ -366,7 +381,7 @@ export class ProjectDetail {
     }
   }
 
-  async renderTabPlaceholder(container, tabId, componentName) {
+  async renderTabPlaceholder(container, tabId, componentName, renderGeneration) {
     // Dynamically load feature components
     try {
       this._destroyTabComponent(tabId);
@@ -374,27 +389,31 @@ export class ProjectDetail {
       switch (tabId) {
         case 'todos': {
           const { TodoList } = await import('../todos/TodoList.js');
+          if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
           component = new TodoList(this.projectId);
           break;
         }
         case 'notes': {
           const { NoteList } = await import('../notes/NoteList.js');
+          if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
           component = new NoteList(this.projectId);
           break;
         }
         case 'timer': {
           const { TimeTracker } = await import('../timer/TimeTracker.js');
+          if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
           component = new TimeTracker(this.projectId);
           break;
         }
         case 'terminal': {
           const { TerminalPanel } = await import('../terminal/TerminalPanel.js');
+          if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
           component = new TerminalPanel(this.projectId, this.project.path);
           break;
         }
       }
       if (component) {
-        if (this._destroyed || this.activeTab !== tabId || !container.isConnected) {
+        if (!this._isCurrentTabRender(tabId, renderGeneration, container)) {
           try {
             component.destroy?.();
           } catch (destroyError) {
@@ -406,7 +425,7 @@ export class ProjectDetail {
         this._tabComponents.set(tabId, component);
       }
     } catch (e) {
-      if (this._destroyed || this.activeTab !== tabId || !container.isConnected) return;
+      if (!this._isCurrentTabRender(tabId, renderGeneration, container)) return;
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">🔧</div>
