@@ -138,6 +138,9 @@ contains(projectDetail, 'if (this._destroyed) return;', 'ProjectDetail must guar
 contains(projectDetail, '_nextTabRenderGeneration(tabId)', 'ProjectDetail must issue per-tab render generations');
 contains(projectDetail, '_isCurrentTabRender(tabId, renderGeneration, container)', 'ProjectDetail must centralize stale async tab checks');
 contains(projectDetail, 'const renderGeneration = this._nextTabRenderGeneration(tabId)', 'ProjectDetail must create a generation for each tab render');
+contains(projectDetail, "this.renderOverview(content, renderGeneration)", 'ProjectDetail overview tab must capture render generation');
+contains(projectDetail, 'async renderOverview(container, renderGeneration)', 'ProjectDetail overview renderer must receive render generation');
+contains(projectDetail, "_isCurrentTabRender('overview', renderGeneration, container)", 'ProjectDetail overview async activity load must reject stale continuations');
 contains(projectDetail, "this.renderTerminalTab(content, renderGeneration)", 'ProjectDetail terminal tab must capture render generation');
 contains(projectDetail, "this.renderTabPlaceholder(content, 'todos', 'TodoList', renderGeneration)", 'ProjectDetail todos tab must capture render generation');
 contains(projectDetail, "this.renderTabPlaceholder(content, 'notes', 'NoteList', renderGeneration)", 'ProjectDetail notes tab must capture render generation');

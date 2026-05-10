@@ -234,7 +234,7 @@ export class ProjectDetail {
 
     switch (tabId) {
       case 'overview':
-        this.renderOverview(content);
+        this.renderOverview(content, renderGeneration);
         break;
       case 'todos':
         this.renderTabPlaceholder(content, 'todos', 'TodoList', renderGeneration);
@@ -281,7 +281,7 @@ export class ProjectDetail {
     }
   }
 
-  async renderOverview(container) {
+  async renderOverview(container, renderGeneration) {
     const p = this.project;
     container.innerHTML = `
       <div class="grid grid-cols-2 gap-6">
@@ -355,7 +355,7 @@ export class ProjectDetail {
     // Load activity
     try {
       const activities = await window.api.activity.list(this.projectId, 5);
-      if (this._destroyed || this.activeTab !== 'overview' || !container.isConnected) return;
+      if (!this._isCurrentTabRender('overview', renderGeneration, container)) return;
       const activityEl = container.querySelector('.overview-activity');
       if (!activityEl) return;
       if (!activities || activities.length === 0) {
