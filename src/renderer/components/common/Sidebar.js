@@ -239,12 +239,24 @@ export class Sidebar {
       return this.renderProjects();
     }
     const entries = this.dirCache.get(dirAbsPath) || [];
+    // Drop selection if it pointed into the subtree we're about to replace.
+    this._deselectTreeItem();
     childrenContainer.innerHTML = '';
     if (entries.length > 0) {
-      // depth=1 is approximate — the real depth depends on where this folder
-      // sits in the tree. For padding indent only; not semantically meaningful.
-      const childTree = this.renderFileTree(entries, projectId, project.path, /*depth*/ 1, isRemote);
+      const folderDepth = Number(folderEl.dataset.depth || '0');
+      const childTree = this.renderFileTree(entries, projectId, project.path, folderDepth + 1, isRemote);
       childrenContainer.appendChild(childTree);
+    } else {
+      childrenContainer.innerHTML = '<div class="text-xs text-slate-500" style="padding-left:2rem;">(empty)</div>';
+    }
+  }
+
+  _evictCachedDescendants(absPath) {
+    // Drop the path itself and any cached children below it.
+    this.dirCache.delete(absPath);
+    const prefix = absPath.endsWith('/') ? absPath : absPath + '/';
+    for (const key of this.dirCache.keys()) {
+      if (key.startsWith(prefix)) this.dirCache.delete(key);
     }
   }
 
@@ -509,6 +521,9 @@ export class Sidebar {
             Toast.show(`Failed to delete: ${result.error}`, 'error');
           } else {
             Toast.show(`Deleted ${fileInfo.name}`, 'info');
+            if (fileInfo.isDirectory) {
+              this._evictCachedDescendants(fileInfo.absolutePath);
+            }
             const lastSlash = fileInfo.absolutePath.lastIndexOf('/');
             const parentDir = lastSlash > 0 ? fileInfo.absolutePath.slice(0, lastSlash) : fileInfo.absolutePath;
             this.refreshFolder(parentDir, fileInfo.projectId);
@@ -839,7 +854,7 @@ export class Sidebar {
 
   async _handleTreeItemMove(draggedItem, destFolderPath) {
     const { absolutePath, name, projectId, remote } = draggedItem;
-    const sep = remote ? '/' : '/';
+    const sep = '/';
     const destPath = destFolderPath + sep + name;
 
     // Prevent moving into itself
@@ -860,6 +875,9 @@ export class Sidebar {
         Toast.show(`Move failed: ${result.error}`, 'error');
       } else {
         Toast.show(`Moved ${name}`, 'success');
+        // Evict any cached entries under the old path so stale contents
+        // don't shadow a future fetch.
+        this._evictCachedDescendants(absolutePath);
         // Refresh both source's parent and destination folder.
         const srcParent = absolutePath.substring(0, absolutePath.lastIndexOf(sep));
         if (srcParent && srcParent !== destFolderPath) {
@@ -1028,6 +1046,7 @@ export class Sidebar {
         folderItem.className = 'sidebar-docs-item sidebar-folder-item';
         folderItem.style.paddingLeft = `${1.5 + depth * 0.75}rem`;
         folderItem.dataset.abs = f.absolutePath;
+        folderItem.dataset.depth = String(depth);
 
         const isFolderExpanded = this.expandedFolders.has(f.absolutePath);
         folderItem.innerHTML = `<span class="folder-toggle ${isFolderExpanded ? 'expanded' : ''}">▸</span><span class="docs-folder-icon">📁</span> <span class="folder-name">${f.name}</span>`;
@@ -1160,9 +1179,13 @@ export class Sidebar {
         // instead of waiting for click-to-expand. Lets refreshFolder + a re-render
         // surface updates immediately.
         const cachedChildren = this.dirCache.get(f.absolutePath);
-        if (cachedChildren && cachedChildren.length > 0 && isFolderExpanded) {
-          const childTree = this.renderFileTree(cachedChildren, projectId, projectPath, depth + 1, remote);
-          childrenContainer.appendChild(childTree);
+        if (cachedChildren && isFolderExpanded) {
+          if (cachedChildren.length > 0) {
+            const childTree = this.renderFileTree(cachedChildren, projectId, projectPath, depth + 1, remote);
+            childrenContainer.appendChild(childTree);
+          } else {
+            childrenContainer.innerHTML = '<div class="text-xs text-slate-500" style="padding-left:2rem;">(empty)</div>';
+          }
         }
         tree.appendChild(childrenContainer);
       } else {
