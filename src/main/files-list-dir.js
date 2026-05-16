@@ -16,11 +16,16 @@ function listDir(dirPath) {
   const out = [];
   for (const item of items) {
     if (isExcluded(item.name)) continue;
-    out.push({
-      name: item.name,
-      absolutePath: path.join(dirPath, item.name),
-      isDirectory: item.isDirectory(),
-    });
+    const absolutePath = path.join(dirPath, item.name);
+    let isDirectory = item.isDirectory();
+    if (!isDirectory && item.isSymbolicLink()) {
+      try {
+        isDirectory = fs.statSync(absolutePath).isDirectory();
+      } catch {
+        // broken symlink — leave as file
+      }
+    }
+    out.push({ name: item.name, absolutePath, isDirectory });
   }
 
   out.sort((a, b) => {

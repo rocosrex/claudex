@@ -7,6 +7,11 @@ const { listDir } = require('../../src/main/files-list-dir');
 
 const ROOT = '/Users/rocos.rex/Projects/unitygame/bloom-forge';
 
+if (!require('node:fs').existsSync(ROOT)) {
+  console.log('list-dir-perf: SKIP (bloom-forge not found at expected path)');
+  process.exit(0);
+}
+
 const t0 = Date.now();
 const entries = listDir(ROOT);
 const ms = Date.now() - t0;
