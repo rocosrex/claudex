@@ -236,3 +236,9 @@ Check PR branch status:
 git status --short --branch
 git log --oneline origin/master..HEAD
 ```
+
+## 2026-05-16: bloom-forge OOM via eager file walk
+
+Two renderer crashes (`EXC_BREAKPOINT` on `CrRendererMain`, JIT-frame crash stack) at 16:05:56 and 16:15:55 were traced to `files:list` returning a 37K-entry recursive nested tree for `bloom-forge` (`.venv-tts` was not in the main-process exclusion set). Every `chokidar` change inside the project triggered a full re-walk + IPC + sidebar re-render, growing the JS heap to OOM.
+
+Fixed by replacing `files:list` with a single-level `files:listDir` and refreshing only the affected folder on `watcher:change` (commits `39ea186`..`023bd75` on branch `lazy-tree-2026-05-16`).
