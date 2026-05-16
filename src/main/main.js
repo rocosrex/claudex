@@ -11,6 +11,7 @@ const remoteFileManager = require('./remote-file-manager');
 const fileWatcher = require('./file-watcher');
 const sttManager = require('./stt-manager');
 const speakerManager = require('./speaker-manager');
+const { listDir } = require('./files-list-dir');
 
 let mainWindow = null;
 
@@ -476,6 +477,10 @@ function isPathSafe(filePath, projectPath) {
 ipcMain.handle('files:list', (_, projectPath) => {
   if (!projectPath || !fs.existsSync(projectPath)) return [];
   return walkProjectFiles(projectPath, projectPath);
+});
+
+ipcMain.handle('files:listDir', (_, dirPath) => {
+  return listDir(dirPath);
 });
 
 ipcMain.handle('files:read', (_, filePath) => {

@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld('api', {
   // Files
   files: {
     list: (projectPath) => ipcRenderer.invoke('files:list', projectPath),
+    listDir: (dirPath) => ipcRenderer.invoke('files:listDir', dirPath),
     read: (filePath) => ipcRenderer.invoke('files:read', filePath),
     readBinary: (filePath) => ipcRenderer.invoke('files:readBinary', filePath),
     write: (filePath, content) => ipcRenderer.invoke('files:write', filePath, content),
