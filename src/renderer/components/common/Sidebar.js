@@ -54,8 +54,6 @@ export class Sidebar {
     // For local projects, key is the absolute path. For remote/SSH projects,
     // key is `__remote__:${projectId}` since path is empty.
     this.dirCache = new Map();
-    // Tracks which project ids have been loaded at least once.
-    this.loadedRoots = new Set();
     this.draggedProjectId = null;
     this.draggedTreeItem = null; // { absolutePath, name, projectId, remote }
     this.selectedTreeItem = null; // { element, absolutePath, name, projectId, remote, isDirectory }
@@ -185,44 +183,69 @@ export class Sidebar {
 
     // File watcher: auto-refresh tree on file system changes
     window.api.watcher.onChange((projectId, data) => {
-      if (this.expandedProjects.has(projectId)) {
-        this.refreshProjectTree(projectId);
-      }
+      if (!this.expandedProjects.has(projectId)) return;
+      const { projects } = store.getState();
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return;
+
+      // chokidar emits absolute paths in data.path; refresh the parent dir.
+      const changedPath = data?.path;
+      if (!changedPath) return;
+      const lastSlash = changedPath.lastIndexOf('/');
+      const parentDir = lastSlash > 0 ? changedPath.slice(0, lastSlash) : project.path;
+      this.refreshFolder(parentDir, projectId);
     });
   }
 
-  async refreshProjectTree(projectId) {
-    // Invalidate cache and re-render
+  async refreshFolder(dirAbsPath, projectId) {
+    // Only refresh directories we've already loaded — no point fetching
+    // a folder the user has never expanded.
+    if (!this.dirCache.has(dirAbsPath)) return;
+
     const { projects } = store.getState();
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
-
     const isRemote = !!project.ssh_host;
-    const cacheKey = isRemote ? `__remote__:${projectId}` : project.path;
-    this.dirCache.delete(cacheKey);
 
     try {
-      if (isRemote) {
-        let remotePath = project.ssh_remote_path || '';
-        if (!remotePath) {
-          const homeDir = await window.api.remote.homeDir(projectId);
-          if (homeDir && !homeDir.error) remotePath = homeDir;
-          else remotePath = '/';
-        }
-        const result = await window.api.remote.listFiles(projectId, remotePath);
-        if (result && !result.error) {
-          this.dirCache.set(cacheKey, Array.isArray(result) ? result : []);
-        }
+      const entries = isRemote
+        ? await window.api.remote.listFiles(projectId, dirAbsPath)
+        : await window.api.files.listDir(dirAbsPath);
+      if (entries && !entries.error) {
+        this.dirCache.set(dirAbsPath, Array.isArray(entries) ? entries : []);
       } else {
-        const entries = await window.api.files.listDir(project.path);
-        this.dirCache.set(cacheKey, entries);
+        // remote returned {error: ...} — don't poison the cache, just bail.
+        return;
       }
     } catch (e) {
-      console.error('Failed to refresh file tree:', e);
+      console.error('Failed to refresh folder:', e);
       return;
     }
 
-    this.renderProjects();
+    // Project-root refresh: full sidebar re-render (existing pattern).
+    const rootKey = isRemote ? `__remote__:${projectId}` : project.path;
+    if (rootKey === dirAbsPath) {
+      this.renderProjects();
+      return;
+    }
+
+    // Nested folder: try to replace just this subtree in place.
+    const tree = this.container.querySelector('.sidebar-docs-tree');
+    if (!tree) return this.renderProjects();
+    const folderEl = tree.querySelector(`[data-abs="${CSS.escape(dirAbsPath)}"]`);
+    const childrenContainer = folderEl?.nextElementSibling;
+    if (!folderEl || !childrenContainer?.classList.contains('sidebar-folder-children')) {
+      // Can't find the DOM node — fall back to full re-render.
+      return this.renderProjects();
+    }
+    const entries = this.dirCache.get(dirAbsPath) || [];
+    childrenContainer.innerHTML = '';
+    if (entries.length > 0) {
+      // depth=1 is approximate — the real depth depends on where this folder
+      // sits in the tree. For padding indent only; not semantically meaningful.
+      const childTree = this.renderFileTree(entries, projectId, project.path, /*depth*/ 1, isRemote);
+      childrenContainer.appendChild(childTree);
+    }
   }
 
   showContextMenu(e, folderPath, project, fileInfo = null) {
@@ -292,7 +315,7 @@ export class Sidebar {
       }
       if (project) {
         addItem('🔄', 'Refresh', () => {
-          this.refreshProjectTree(project.id);
+          this.refreshFolder(fileInfo.absolutePath, fileInfo.projectId);
         });
       }
       addSeparator();
@@ -323,7 +346,8 @@ export class Sidebar {
         });
       }
       addItem('🔄', 'Refresh', () => {
-        this.refreshProjectTree(project.id);
+        const rootKey = project.ssh_host ? `__remote__:${project.id}` : project.path;
+        this.refreshFolder(rootKey, project.id);
       });
       addSeparator();
       addItem('🗑', 'Delete Project', () => {
@@ -435,7 +459,7 @@ export class Sidebar {
           Toast.show(`Failed to create file: ${result.error}`, 'error');
         } else {
           Toast.show(`Created ${fileName}`, 'success');
-          await this.refreshProjectTree(projectId);
+          await this.refreshFolder(parentPath, projectId);
           // Open the new file in editor if it's a text file
           if (isTextFile(fileName)) {
             const { projects } = store.getState();
@@ -464,7 +488,7 @@ export class Sidebar {
           Toast.show(`Failed to create folder: ${result.error}`, 'error');
         } else {
           Toast.show(`Created folder ${name}`, 'success');
-          await this.refreshProjectTree(projectId);
+          await this.refreshFolder(parentPath, projectId);
         }
       } catch (err) {
         Toast.show(`Failed to create folder: ${err.message}`, 'error');
@@ -485,7 +509,9 @@ export class Sidebar {
             Toast.show(`Failed to delete: ${result.error}`, 'error');
           } else {
             Toast.show(`Deleted ${fileInfo.name}`, 'info');
-            this.refreshProjectTree(fileInfo.projectId);
+            const lastSlash = fileInfo.absolutePath.lastIndexOf('/');
+            const parentDir = lastSlash > 0 ? fileInfo.absolutePath.slice(0, lastSlash) : fileInfo.absolutePath;
+            this.refreshFolder(parentDir, fileInfo.projectId);
           }
           modal.close();
         } catch (err) {
@@ -546,16 +572,17 @@ export class Sidebar {
     input.focus();
     input.setSelectionRange(0, selectEnd);
 
+    const parentDir = fileInfo.absolutePath.substring(0, fileInfo.absolutePath.lastIndexOf('/'));
+
     const commitRename = async () => {
       const newName = input.value.trim();
       if (!newName || newName === oldName) {
         // Revert
-        this.refreshProjectTree(fileInfo.projectId);
+        this.refreshFolder(parentDir, fileInfo.projectId);
         return;
       }
 
-      const parentPath = fileInfo.absolutePath.substring(0, fileInfo.absolutePath.lastIndexOf('/'));
-      const newPath = parentPath + '/' + newName;
+      const newPath = parentDir + '/' + newName;
 
       try {
         const result = await window.api.files.move(fileInfo.absolutePath, newPath);
@@ -564,10 +591,10 @@ export class Sidebar {
         } else {
           Toast.show(`Renamed to ${newName}`, 'success');
         }
-        this.refreshProjectTree(fileInfo.projectId);
+        this.refreshFolder(parentDir, fileInfo.projectId);
       } catch (err) {
         Toast.show(`Rename failed: ${err.message}`, 'error');
-        this.refreshProjectTree(fileInfo.projectId);
+        this.refreshFolder(parentDir, fileInfo.projectId);
       }
     };
 
@@ -582,7 +609,7 @@ export class Sidebar {
         e.preventDefault();
         e.stopPropagation();
         committed = true;
-        this.refreshProjectTree(fileInfo.projectId);
+        this.refreshFolder(parentDir, fileInfo.projectId);
       }
     });
     input.addEventListener('blur', () => {
@@ -625,7 +652,6 @@ export class Sidebar {
           await window.api.projects.delete(project.id);
           const deleteCacheKey = project.ssh_host ? `__remote__:${project.id}` : project.path;
           this.dirCache.delete(deleteCacheKey);
-          this.loadedRoots.delete(project.id);
           this.expandedProjects.delete(project.id);
           const projects = await window.api.projects.list();
           store.setState({ projects, selectedProjectId: null });
@@ -834,7 +860,12 @@ export class Sidebar {
         Toast.show(`Move failed: ${result.error}`, 'error');
       } else {
         Toast.show(`Moved ${name}`, 'success');
-        this.refreshProjectTree(projectId);
+        // Refresh both source's parent and destination folder.
+        const srcParent = absolutePath.substring(0, absolutePath.lastIndexOf(sep));
+        if (srcParent && srcParent !== destFolderPath) {
+          await this.refreshFolder(srcParent, projectId);
+        }
+        await this.refreshFolder(destFolderPath, projectId);
       }
     } catch (err) {
       Toast.show(`Move failed: ${err.message}`, 'error');
@@ -853,7 +884,7 @@ export class Sidebar {
             Toast.show(`Upload failed: ${result.error}`, 'error');
           } else {
             Toast.show(`Uploaded ${fileName}`, 'success');
-            this.refreshProjectTree(projectId);
+            this.refreshFolder(destDir, projectId);
           }
         } catch (err) {
           Toast.show(`Upload failed: ${err.message}`, 'error');
@@ -871,7 +902,7 @@ export class Sidebar {
             Toast.show(`Copy failed: ${result.error}`, 'error');
           } else {
             Toast.show(`Copied ${fileName}`, 'success');
-            this.refreshProjectTree(projectId);
+            this.refreshFolder(destDir, projectId);
           }
         } catch (err) {
           Toast.show(`Copy failed: ${err.message}`, 'error');
@@ -962,11 +993,9 @@ export class Sidebar {
           const entries = await window.api.files.listDir(projectPath);
           this.dirCache.set(cacheKey, entries);
         }
-        this.loadedRoots.add(projectId);
       } catch (e) {
         console.error('Failed to load project root:', e);
         this.dirCache.set(cacheKey, []);
-        this.loadedRoots.add(projectId);
         // Show error in tree
         const errEl = document.createElement('div');
         errEl.className = 'sidebar-docs-tree';
@@ -998,6 +1027,7 @@ export class Sidebar {
         const folderItem = document.createElement('div');
         folderItem.className = 'sidebar-docs-item sidebar-folder-item';
         folderItem.style.paddingLeft = `${1.5 + depth * 0.75}rem`;
+        folderItem.dataset.abs = f.absolutePath;
 
         const isFolderExpanded = this.expandedFolders.has(f.absolutePath);
         folderItem.innerHTML = `<span class="folder-toggle ${isFolderExpanded ? 'expanded' : ''}">▸</span><span class="docs-folder-icon">📁</span> <span class="folder-name">${f.name}</span>`;
@@ -1017,14 +1047,21 @@ export class Sidebar {
             this.expandedFolders.add(f.absolutePath);
             if (toggleEl) toggleEl.classList.add('expanded');
 
-            // Remote folders: lazy-load children on first expand
-            if (remote && childrenContainer && childrenContainer.children.length === 0) {
+            // Lazy-load children for both local and remote on first expand.
+            if (childrenContainer && childrenContainer.children.length === 0) {
               childrenContainer.innerHTML = '<div class="text-xs text-slate-500" style="padding-left:2rem;">Loading...</div>';
               childrenContainer.style.display = '';
               try {
-                const children = await window.api.remote.listFiles(projectId, f.absolutePath);
+                let children;
+                if (remote) {
+                  const res = await window.api.remote.listFiles(projectId, f.absolutePath);
+                  children = (res && !res.error) ? res : [];
+                } else {
+                  children = await window.api.files.listDir(f.absolutePath);
+                }
+                this.dirCache.set(f.absolutePath, children);
                 childrenContainer.innerHTML = '';
-                if (children && !children.error && children.length > 0) {
+                if (children.length > 0) {
                   const childTree = this.renderFileTree(children, projectId, projectPath, depth + 1, remote);
                   childrenContainer.appendChild(childTree);
                 } else {
@@ -1119,8 +1156,12 @@ export class Sidebar {
         const childrenContainer = document.createElement('div');
         childrenContainer.className = 'sidebar-folder-children';
         if (!isFolderExpanded) childrenContainer.style.display = 'none';
-        if (f.children && f.children.length > 0) {
-          const childTree = this.renderFileTree(f.children, projectId, projectPath, depth + 1, remote);
+        // If this folder's children are already cached, render them inline
+        // instead of waiting for click-to-expand. Lets refreshFolder + a re-render
+        // surface updates immediately.
+        const cachedChildren = this.dirCache.get(f.absolutePath);
+        if (cachedChildren && cachedChildren.length > 0 && isFolderExpanded) {
+          const childTree = this.renderFileTree(cachedChildren, projectId, projectPath, depth + 1, remote);
           childrenContainer.appendChild(childTree);
         }
         tree.appendChild(childrenContainer);
