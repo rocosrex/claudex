@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const { isExcluded } = require('./path-filters');
 
 let chokidar = null;
 
@@ -10,12 +11,6 @@ async function loadChokidar() {
   }
   return chokidar;
 }
-
-const EXCLUDED_DIRS = [
-  'node_modules', '.git', 'dist', 'build', '.next',
-  '__pycache__', '.venv', '.claude', '.cache', '.turbo',
-  'coverage', '.nyc_output',
-];
 
 // Watcher pool: Map<projectId, { watcher, projectPath }>
 const watchers = new Map();
@@ -35,11 +30,14 @@ async function startWatching(projectId, projectPath) {
 
   const { watch } = await loadChokidar();
 
-  const ignored = EXCLUDED_DIRS.map(d => path.join(projectPath, '**', d, '**'));
-  ignored.push(/(^|[\/\\])\../); // dotfiles
-
   const watcher = watch(projectPath, {
-    ignored,
+    ignored: (filePath, _stats) => {
+      if (filePath === projectPath) return false;
+      // Chokidar passes absolute paths; check each segment under projectPath.
+      const rel = path.relative(projectPath, filePath);
+      if (!rel) return false;
+      return rel.split(path.sep).some(seg => isExcluded(seg));
+    },
     persistent: true,
     ignoreInitial: true,
     depth: 10,

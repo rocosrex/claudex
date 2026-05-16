@@ -435,49 +435,11 @@ ipcMain.handle('shell:openExternal', (_, url) => {
 
 // --- IPC: Files ---
 
-const EXCLUDED_DIRS = new Set([
-  'node_modules', '.git', '.DS_Store', 'dist', 'build', '.next',
-  '__pycache__', '.venv', '.env', '.cache', '.turbo', 'coverage',
-  '.nyc_output', '.idea', '.vscode',
-]);
-
-function walkProjectFiles(dir, baseDir) {
-  const entries = [];
-  let items;
-  try {
-    items = fs.readdirSync(dir, { withFileTypes: true });
-  } catch (e) {
-    return entries;
-  }
-  items.sort((a, b) => {
-    if (a.isDirectory() && !b.isDirectory()) return -1;
-    if (!a.isDirectory() && b.isDirectory()) return 1;
-    return a.name.localeCompare(b.name);
-  });
-  for (const item of items) {
-    if (EXCLUDED_DIRS.has(item.name)) continue;
-    const abs = path.join(dir, item.name);
-    const rel = path.relative(baseDir, abs);
-    if (item.isDirectory()) {
-      const children = walkProjectFiles(abs, baseDir);
-      entries.push({ name: item.name, relativePath: rel, absolutePath: abs, isDirectory: true, children });
-    } else {
-      entries.push({ name: item.name, relativePath: rel, absolutePath: abs, isDirectory: false, children: [] });
-    }
-  }
-  return entries;
-}
-
 function isPathSafe(filePath, projectPath) {
   const resolved = path.resolve(filePath);
   const projectRoot = path.resolve(projectPath);
   return resolved.startsWith(projectRoot);
 }
-
-ipcMain.handle('files:list', (_, projectPath) => {
-  if (!projectPath || !fs.existsSync(projectPath)) return [];
-  return walkProjectFiles(projectPath, projectPath);
-});
 
 ipcMain.handle('files:listDir', (_, dirPath) => {
   return listDir(dirPath);
