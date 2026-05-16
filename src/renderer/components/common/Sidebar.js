@@ -50,7 +50,12 @@ export class Sidebar {
     this.onNavigate = null; // set by App
     this.expandedProjects = new Set();
     this.expandedFolders = new Set();
-    this.filesCache = new Map();
+    // Per-directory listings: Map<cacheKey, entries[]>
+    // For local projects, key is the absolute path. For remote/SSH projects,
+    // key is `__remote__:${projectId}` since path is empty.
+    this.dirCache = new Map();
+    // Tracks which project ids have been loaded at least once.
+    this.loadedRoots = new Set();
     this.draggedProjectId = null;
     this.draggedTreeItem = null; // { absolutePath, name, projectId, remote }
     this.selectedTreeItem = null; // { element, absolutePath, name, projectId, remote, isDirectory }
@@ -188,12 +193,14 @@ export class Sidebar {
 
   async refreshProjectTree(projectId) {
     // Invalidate cache and re-render
-    this.filesCache.delete(projectId);
     const { projects } = store.getState();
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
 
     const isRemote = !!project.ssh_host;
+    const cacheKey = isRemote ? `__remote__:${projectId}` : project.path;
+    this.dirCache.delete(cacheKey);
+
     try {
       if (isRemote) {
         let remotePath = project.ssh_remote_path || '';
@@ -204,11 +211,11 @@ export class Sidebar {
         }
         const result = await window.api.remote.listFiles(projectId, remotePath);
         if (result && !result.error) {
-          this.filesCache.set(projectId, Array.isArray(result) ? result : []);
+          this.dirCache.set(cacheKey, Array.isArray(result) ? result : []);
         }
       } else {
-        const files = await window.api.files.list(project.path);
-        this.filesCache.set(projectId, files);
+        const entries = await window.api.files.listDir(project.path);
+        this.dirCache.set(cacheKey, entries);
       }
     } catch (e) {
       console.error('Failed to refresh file tree:', e);
@@ -616,7 +623,9 @@ export class Sidebar {
       onConfirm: async () => {
         try {
           await window.api.projects.delete(project.id);
-          this.filesCache.delete(project.id);
+          const deleteCacheKey = project.ssh_host ? `__remote__:${project.id}` : project.path;
+          this.dirCache.delete(deleteCacheKey);
+          this.loadedRoots.delete(project.id);
           this.expandedProjects.delete(project.id);
           const projects = await window.api.projects.list();
           store.setState({ projects, selectedProjectId: null });
@@ -790,9 +799,11 @@ export class Sidebar {
       wrapper.appendChild(item);
 
       // Render expanded file tree if cached
-      if (isExpanded && this.filesCache.has(p.id)) {
-        const isRemote = !!p.ssh_host;
-        const treeEl = this.renderFileTree(this.filesCache.get(p.id), p.id, p.path, 0, isRemote);
+      const projectIsRemote = !!p.ssh_host;
+      const cacheKey = projectIsRemote ? `__remote__:${p.id}` : p.path;
+      if (isExpanded && this.dirCache.has(cacheKey)) {
+        const rootEntries = this.dirCache.get(cacheKey);
+        const treeEl = this.renderFileTree(rootEntries, p.id, p.path, 0, projectIsRemote);
         wrapper.appendChild(treeEl);
       }
 
@@ -934,25 +945,28 @@ export class Sidebar {
 
     const isRemote = project && !!project.ssh_host;
 
-    if (!this.filesCache.has(projectId)) {
+    const cacheKey = isRemote ? `__remote__:${projectId}` : projectPath;
+
+    if (!this.dirCache.has(cacheKey)) {
       try {
         if (isRemote) {
           let remotePath = project.ssh_remote_path || '';
           if (!remotePath) {
             const homeDir = await window.api.remote.homeDir(projectId);
-            if (homeDir && !homeDir.error) remotePath = homeDir;
-            else remotePath = '/';
+            remotePath = (homeDir && !homeDir.error) ? homeDir : '/';
           }
           const result = await window.api.remote.listFiles(projectId, remotePath);
           if (result && result.error) throw new Error(result.error);
-          this.filesCache.set(projectId, Array.isArray(result) ? result : []);
+          this.dirCache.set(cacheKey, Array.isArray(result) ? result : []);
         } else {
-          const files = await window.api.files.list(projectPath);
-          this.filesCache.set(projectId, files);
+          const entries = await window.api.files.listDir(projectPath);
+          this.dirCache.set(cacheKey, entries);
         }
+        this.loadedRoots.add(projectId);
       } catch (e) {
-        console.error('Failed to load file tree:', e);
-        this.filesCache.set(projectId, []);
+        console.error('Failed to load project root:', e);
+        this.dirCache.set(cacheKey, []);
+        this.loadedRoots.add(projectId);
         // Show error in tree
         const errEl = document.createElement('div');
         errEl.className = 'sidebar-docs-tree';
@@ -962,7 +976,7 @@ export class Sidebar {
       }
     }
 
-    const files = this.filesCache.get(projectId);
+    const files = this.dirCache.get(cacheKey);
     if (files.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'sidebar-docs-tree';
