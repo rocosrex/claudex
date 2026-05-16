@@ -20,6 +20,46 @@ let rendererCrashTimestamps = [];
 let rendererRecoveryShown = false;
 let lastRendererCrashDetails = null;
 
+// Diagnostics: persistent renderer crash log
+const CRASH_LOG_DIR = app.getPath('logs');
+const CRASH_LOG_PATH = path.join(CRASH_LOG_DIR, 'renderer-crashes.log');
+let lastRendererHeartbeat = null;
+let rendererStartedAt = null;
+
+function writeCrashLogEntry(win, details) {
+  const now = Date.now();
+  const entry = {
+    ts: new Date(now).toISOString(),
+    type: 'render-process-gone',
+    appUptimeSec: Math.round(process.uptime()),
+    rendererUptimeSec: rendererStartedAt
+      ? +((now - rendererStartedAt) / 1000).toFixed(1)
+      : null,
+    details: {
+      reason: details?.reason || null,
+      exitCode: details?.exitCode ?? null,
+    },
+    terminalCount: typeof terminalManager.getTerminalCount === 'function'
+      ? terminalManager.getTerminalCount()
+      : null,
+    lastHeartbeat: lastRendererHeartbeat
+      ? {
+        ageSec: +((now - lastRendererHeartbeat.receivedAt) / 1000).toFixed(1),
+        ...lastRendererHeartbeat.payload,
+      }
+      : null,
+    rendererCrashesInWindow: rendererCrashTimestamps.length + 1,
+  };
+
+  try {
+    fs.mkdirSync(CRASH_LOG_DIR, { recursive: true });
+    fs.appendFileSync(CRASH_LOG_PATH, JSON.stringify(entry) + '\n');
+    console.error('[renderer-recovery] Crash logged to', CRASH_LOG_PATH);
+  } catch (err) {
+    console.error('[renderer-recovery] Failed to write crash log:', err.message);
+  }
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({
     '&': '&amp;',
@@ -98,6 +138,8 @@ function showRendererRecoveryPage(win, details) {
 function recoverRenderer(win, details) {
   if (!win || win.isDestroyed() || rendererRecoveryShown) return;
 
+  writeCrashLogEntry(win, details);
+
   const now = Date.now();
   rendererCrashTimestamps = rendererCrashTimestamps
     .filter((timestamp) => now - timestamp < RENDERER_CRASH_WINDOW_MS);
@@ -118,6 +160,15 @@ function recoverRenderer(win, details) {
 }
 
 function attachWindowRecoveryHandlers(win) {
+  win.webContents.on('did-start-loading', () => {
+    lastRendererHeartbeat = null;
+    rendererStartedAt = null;
+  });
+
+  win.webContents.on('did-finish-load', () => {
+    rendererStartedAt = Date.now();
+  });
+
   win.webContents.on('render-process-gone', (_event, details) => {
     const reason = details?.reason || 'unknown';
     if (reason === 'clean-exit') {
@@ -217,6 +268,14 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+// --- IPC: Diagnostics ---
+
+ipcMain.on('diag:heartbeat', (_event, payload) => {
+  if (payload && typeof payload === 'object') {
+    lastRendererHeartbeat = { receivedAt: Date.now(), payload };
+  }
+});
 
 // --- IPC: Projects ---
 

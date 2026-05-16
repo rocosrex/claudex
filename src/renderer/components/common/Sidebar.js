@@ -296,6 +296,10 @@ export class Sidebar {
     // Project-level context menu
     else if (project) {
       const projectPath = project.path;
+      addItem('⌘', 'Add to Workbench', () => {
+        this._addProjectToWorkbench(project);
+      });
+      addSeparator();
       if (projectPath && !project.ssh_host) {
         addItem('📝', 'New Markdown File', () => {
           this._createNewFile(projectPath, project.id, '.md');
@@ -329,6 +333,41 @@ export class Sidebar {
       if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 8}px`;
       if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 8}px`;
     });
+  }
+
+  async _addProjectToWorkbench(project) {
+    const app = window.app;
+    if (!app) return;
+
+    if (this.onNavigate) this.onNavigate('terminal');
+
+    const waitForView = () => new Promise((resolve) => {
+      const start = Date.now();
+      const tick = () => {
+        if (app.multiTerminalView && app.multiTerminalView.container) return resolve(true);
+        if (Date.now() - start > 3000) return resolve(false);
+        requestAnimationFrame(tick);
+      };
+      tick();
+    });
+
+    const ready = await waitForView();
+    if (!ready) {
+      Toast.show('Workbench failed to open', 'error');
+      return;
+    }
+
+    const view = app.multiTerminalView;
+    try {
+      if (project.ssh_host) {
+        await view.addSSHTerminal(project.id, `🔒 ${project.ssh_username}@${project.ssh_host}`);
+      } else {
+        const title = `${project.icon || '📁'} ${project.name}`;
+        await view.addTerminal(project.id, project.path || '', title);
+      }
+    } catch (e) {
+      Toast.show(`Failed to add terminal: ${e.message || e}`, 'error');
+    }
   }
 
   _showInputModal(title, label, defaultValue, onSubmit) {

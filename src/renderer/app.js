@@ -28,6 +28,34 @@ class App {
     this.setupUpdater();
     await this.loadData();
     this.navigate('dashboard');
+    this.startDiagHeartbeat();
+  }
+
+  startDiagHeartbeat() {
+    const sendHeartbeat = window.api?.diag?.heartbeat;
+    if (typeof sendHeartbeat !== 'function') return;
+
+    const tick = () => {
+      try {
+        const state = store.getState ? store.getState() : {};
+        const workbenchCells = this.multiTerminalView?.cells?.length ?? 0;
+        const mem = (typeof performance !== 'undefined' && performance.memory) || {};
+        const toMB = (b) => (typeof b === 'number' ? +(b / 1048576).toFixed(1) : null);
+        sendHeartbeat({
+          route: state.currentView || null,
+          workbenchCells,
+          bottomPanelVisible: !!this.bottomPanel?.visible,
+          jsHeapUsedMB: toMB(mem.usedJSHeapSize),
+          jsHeapTotalMB: toMB(mem.totalJSHeapSize),
+          jsHeapLimitMB: toMB(mem.jsHeapSizeLimit),
+        });
+      } catch (_) {
+        // heartbeat must never crash the renderer
+      }
+    };
+
+    tick();
+    setInterval(tick, 10_000);
   }
 
   renderLayout() {

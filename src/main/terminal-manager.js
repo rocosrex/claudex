@@ -167,6 +167,10 @@ function closeAll() {
   terminals.clear();
 }
 
+function getTerminalCount() {
+  return terminals.size;
+}
+
 module.exports = {
   createTerminal,
   createSSHTerminal,
@@ -177,4 +181,5 @@ module.exports = {
   setDataCallback,
   setExitCallback,
   closeAll,
+  getTerminalCount,
 };

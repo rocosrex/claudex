@@ -125,4 +125,8 @@ contextBridge.exposeInMainWorld('api', {
     install: () => ipcRenderer.invoke('updater:install'),
     onStatus: (callback) => ipcRenderer.on('updater:status', (_, data) => callback(data)),
   },
+  // Diagnostics (renderer heartbeat for crash logging)
+  diag: {
+    heartbeat: (payload) => ipcRenderer.send('diag:heartbeat', payload),
+  },
 });
