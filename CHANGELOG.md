@@ -4,6 +4,23 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.5] - 2026-05-16
+
+### Added
+- Renderer crash diagnostics — crash details (exit code, uptime, terminal count, last heartbeat age) are now written to `~/Library/Logs/claudex/` for post-mortem analysis
+- Periodic heartbeat from renderer to main process tracks renderer liveness
+
+### Changed
+- Sidebar file tree is now lazy-loaded — folder children are fetched on expand instead of walking the entire project tree up front; large projects (e.g. those with `.venv`, `node_modules`, or thousands of files) no longer freeze the renderer on first expand
+- File watcher events refresh only the affected directory instead of reloading the whole project tree
+- Excluded path rules (dot-named directories, `node_modules`, `dist`, `build`, `out`, `__pycache__`, `coverage`) are now shared between the file watcher and the directory loader — no more inconsistencies between what is watched and what is shown
+
+### Fixed
+- Symlinked directories are now correctly treated as directories in the sidebar tree
+- Selecting a tree item and then deleting its parent directory no longer leaves a stale selection
+- Refreshed directories that are now empty show an `(empty)` placeholder instead of silently collapsing
+- Stale cache entries for deleted directories are evicted from descendant paths
+
 ## [1.10.4] - 2026-03-07
 
 ### Added
