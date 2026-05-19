@@ -5,6 +5,7 @@ import { terminalRouter } from '../../utils/terminal-router.js';
 import { getTerminalSettings, buildTerminalOptions } from './terminal-themes.js';
 import { sttService } from '../../utils/stt-service.js';
 import { STTIndicator } from './STTIndicator.js';
+import { enableTerminalFileDrop } from '../../utils/terminal-file-drop.js';
 
 const MAX_TERMINALS = 8;
 
@@ -264,6 +265,11 @@ export class MultiTerminalView {
 
     const termContainer = cellEl.querySelector('.cell-terminal-container');
     term.open(termContainer);
+
+    // Drag-and-drop files/folders → insert quoted path at prompt.
+    // Attached to the inner container so the cell-swap drop handler on
+    // cellEl (titlebar drag) keeps working for non-file drags.
+    enableTerminalFileDrop(termContainer, () => termId);
 
     // Register with router
     terminalRouter.register(

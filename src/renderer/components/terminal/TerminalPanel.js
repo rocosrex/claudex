@@ -4,6 +4,7 @@ import { store } from '../../store/store.js';
 import { getTerminalSettings, buildTerminalOptions } from './terminal-themes.js';
 import { sttService } from '../../utils/stt-service.js';
 import { STTIndicator } from './STTIndicator.js';
+import { enableTerminalFileDrop } from '../../utils/terminal-file-drop.js';
 
 export class TerminalPanel {
   /**
@@ -197,6 +198,9 @@ export class TerminalPanel {
     wrapper.addEventListener('click', () => {
       term.focus();
     });
+
+    // Drag-and-drop files/folders → insert quoted path at prompt
+    enableTerminalFileDrop(wrapper, () => termId);
 
     // Prevent Electron from intercepting certain keys
     term.attachCustomKeyEventHandler((e) => {
@@ -468,6 +472,8 @@ export class TerminalPanel {
     });
 
     wrapper.addEventListener('click', () => term.focus());
+
+    enableTerminalFileDrop(wrapper, () => termId);
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.metaKey && (e.key === 'c' || e.key === 'v')) return false;
