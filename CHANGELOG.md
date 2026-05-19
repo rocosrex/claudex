@@ -4,6 +4,11 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.6] - 2026-05-19
+
+### Added
+- Drag-and-drop files or folders from Finder onto a terminal pane to insert their shell-quoted absolute paths at the prompt (matches macOS Terminal.app / iTerm2 behaviour). Works in both the single `TerminalPanel` and `MultiTerminalView` grid cells; non-file drags (e.g. cell-swap titlebar drag) continue to work unchanged
+
 ## [1.10.5] - 2026-05-16
 
 ### Added
