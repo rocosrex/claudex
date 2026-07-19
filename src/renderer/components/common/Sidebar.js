@@ -343,6 +343,12 @@ export class Sidebar {
       });
       addSeparator();
       if (projectPath && !project.ssh_host) {
+        addItem('🖥', 'Open New Terminal', () => {
+          window.api.terminal.openExternal(projectPath, false)
+            .then(() => Toast.show(`Opened Terminal in ${project.name}`, 'info'))
+            .catch((err) => Toast.show(`Failed to open Terminal: ${err.message || err}`, 'error'));
+        });
+        addSeparator();
         addItem('📝', 'New Markdown File', () => {
           this._createNewFile(projectPath, project.id, '.md');
         });
