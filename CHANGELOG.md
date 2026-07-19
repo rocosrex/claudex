@@ -4,6 +4,15 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.7] - 2026-07-19
+
+### Added
+- Right-click a project row in the sidebar and choose "Open New Terminal" to open macOS Terminal.app already `cd`-ed into that project's folder. `claude` is not launched automatically. The item is hidden for projects without a local path (e.g. SSH-only entries), and a toast reports failures
+- `.claude/skills/run-claudex/` — an internal developer skill (not an end-user feature) that launches and drives the app through Playwright's `_electron` API for UI interaction and screenshots
+
+### Fixed
+- Selecting text with the mouse and copying it with `Cmd+C` did nothing while a TUI such as Claude Code, vim or tmux was running in the terminal. Those programs enable xterm mouse tracking (DECSET `?1000`/`?1002`/`?1006`), so xterm.js forwards drags to the application instead of building a local selection — correct terminal behaviour, but the standard macOS escape hatch was shut: xterm gates Option+drag behind `macOptionClickForcesSelection`, which defaults to `false` and was never set. **Hold ⌥ Option while dragging** to select inside a TUI. Plain drag still goes to the TUI, so Claude Code's click and scroll handling is unchanged. Fixed in the shared `buildTerminalOptions()`, so it applies to `TerminalPanel` (local and SSH) and `MultiTerminalView` alike
+
 ## [1.10.6] - 2026-05-19
 
 ### Added
