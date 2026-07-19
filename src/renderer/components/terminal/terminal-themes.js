@@ -266,5 +266,9 @@ export function buildTerminalOptions(settings) {
     lineHeight: settings.lineHeight,
     cursorStyle: settings.cursorStyle,
     cursorBlink: settings.cursorBlink,
+    // TUIs that enable mouse tracking (Claude Code, vim, tmux) consume drags,
+    // so plain drag-select stops working inside them. xterm gates the macOS
+    // escape hatch (Option+drag) behind this flag, which defaults to false.
+    macOptionClickForcesSelection: true,
   };
 }
