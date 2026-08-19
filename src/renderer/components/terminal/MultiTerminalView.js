@@ -6,6 +6,7 @@ import { getTerminalSettings, buildTerminalOptions } from './terminal-themes.js'
 import { sttService } from '../../utils/stt-service.js';
 import { STTIndicator } from './STTIndicator.js';
 import { enableTerminalFileDrop } from '../../utils/terminal-file-drop.js';
+import { protectTerminalSelection, copyTerminalSelection } from '../../utils/terminal-clipboard.js';
 
 const MAX_TERMINALS = 8;
 
@@ -288,12 +289,16 @@ export class MultiTerminalView {
 
     // Custom key handler
     term.attachCustomKeyEventHandler((e) => {
-      if (e.metaKey && (e.key === 'c' || e.key === 'v')) return false;
+      if (e.metaKey && (e.key === 'c' || e.key === 'v')) {
+        if (e.type === 'keydown' && e.key === 'c') copyTerminalSelection(term);
+        return false;
+      }
       if (e.type === 'keydown' && e.key === 'PageDown') {
         if (sttService.handlePgDnKey()) return false;
       }
       return true;
     });
+    protectTerminalSelection(term);
 
     // Store cell data
     const cellData = { type: 'terminal', termId, term, fitAddon, cellEl, title };
