@@ -4,6 +4,11 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.8] - 2026-08-19
+
+### Fixed
+- Copying with `Cmd+C` intermittently did nothing while Claude Code, tmux or vim was running — pasting then yielded stale clipboard content, which made it look like "only Claude's output won't copy". Root cause: xterm.js clears the active selection whenever data flagged as user input reaches the pty; with mouse tracking on, a trackpad wheel tick becomes an SGR mouse report, and in the alt buffer it becomes arrow-key sequences, so macOS momentum-scroll ticks landing between mouse-up and `Cmd+C` silently wiped the selection. Terminals now swallow wheel events while a selection is held — only in the states where the wheel would turn into pty input, so local scrollback scrolling is unaffected — and `Cmd+C` writes the selection to the clipboard directly instead of relying on the focus-sensitive native copy-event chain. Applies to the Workbench grid and `TerminalPanel` (local and SSH). Verified with an isolated Electron + xterm harness (bug reproduced 9/9 unpatched, 10/10 fixed) and an in-app E2E pass; a content matrix confirmed Korean (NFC/NFD), emoji, box drawing, OSC 8 links and wrapped lines all copy intact
+
 ## [1.10.7] - 2026-07-19
 
 ### Added
