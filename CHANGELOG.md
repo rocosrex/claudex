@@ -4,6 +4,14 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.10] - 2026-09-01
+
+### Added
+- `.claude/skills/run-claudex/selection-copy-test.mjs` — an internal developer regression test (not an end-user feature) that drives the running app through Playwright with a real ⌥ Option+drag, a real mouse move and a real `Cmd+C`, then reads the system clipboard back with `pbpaste`. An isolated xterm harness passed this bug twice while the real app still failed, so terminal selection changes are verified against the shipping app from now on
+
+### Fixed
+- The selection highlight disappeared roughly once a second while a TUI such as Claude Code was running, even though `Cmd+C` copied the right text after 1.10.9. xterm.js answers a mouse-mode re-arm with `SelectionService.disable()`, which clears the selection outright — so the copy was correct while the screen insisted nothing was selected. That re-arm cannot be intercepted from outside xterm, so terminals now remember the selection's range as well as its text and re-apply it whenever the selection disappears with no user action behind it. ⌥ Option+drag selections stay visible until you actually click or type. Restoration is skipped when the terminal content scrolled underneath the selection, since the stored coordinates would then point at different cells; `Cmd+C` still copies from the text snapshot in that case
+
 ## [1.10.9] - 2026-09-01
 
 ### Fixed
