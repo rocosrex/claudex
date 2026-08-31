@@ -4,6 +4,12 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.9] - 2026-09-01
+
+### Fixed
+- `Cmd+C` still silently did nothing when copying Claude Code's output, even after the 1.10.8 fix — pasting kept returning stale clipboard content. 1.10.8 closed only one of the three ways xterm.js 5.5.0 destroys a selection; the two remaining ones are specific to any-motion mouse tracking (`DECSET ?1003`), which Claude Code turns on at startup. First, every button-less mouse move becomes a pty report and xterm clears the selection on any user input, so the pointer twitching as you release an ⌥ Option+drag was enough to lose it. Second, re-emitting an already-active mouse mode fires xterm's `onProtocolChange` unconditionally, which disables the selection service outright — and Claude Code re-emits the whole `?1000/?1002/?1003/?1006` block on every click, resize and large paste, so the selection died with no user action at all. Terminals now swallow button-less mouse moves while a selection is held, and `Cmd+C` falls back to a snapshot of the last selection when the live one has already been wiped. Applies to the Workbench grid and `TerminalPanel` (local and SSH). One visible limitation remains: when a TUI re-arms mouse tracking the highlight disappears, but `Cmd+C` still copies the right text
+- Verified in the real app with Playwright rather than an isolated harness — `master` failed with no clipboard write at all, the fix passes 3/3. The previous harness could not reproduce the failure because `Cmd+C` arrives as a bare `Meta` keydown *followed by* `c`, and only the real key sequence exposed the snapshot being discarded one event before the copy asked for it
+
 ## [1.10.8] - 2026-08-19
 
 ### Fixed
