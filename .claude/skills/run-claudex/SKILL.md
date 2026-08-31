@@ -83,6 +83,23 @@ Screenshots → `/tmp/claudex-shots/` (override `SCREENSHOT_DIR`).
 - Native modules (`node-pty`, `better-sqlite3`) are prebuilt for Electron's
   ABI — launch via the bundled Electron binary, never plain `node`.
 
+## Regression test: terminal selection + Cmd+C
+
+```bash
+node .claude/skills/run-claudex/selection-copy-test.mjs      # exit 0 = all checks passed
+```
+
+Drives a real Option+drag, a real button-less mouse move, a real `Cmd+C`, and
+reads the system clipboard back with `pbpaste`, against a stand-in TUI that
+enables any-motion mouse tracking and re-arms it every second — exactly what
+Claude Code does. Five checks; screenshots land in `/tmp/claudex-shots/`.
+
+**Run this after touching `terminal-clipboard.js`, `terminal-themes.js`
+(`macOptionClickForcesSelection`) or any terminal key handler.** An isolated
+xterm harness is not a substitute and has already passed this bug twice: `Cmd+C`
+arrives as a bare `Meta` keydown *then* `c`, and only Playwright's real input
+reproduces that ordering, trusted events, and modifier state.
+
 ## Human path
 
 `npm start` — opens a window, no automation hooks. Quit Claudex.app first.
