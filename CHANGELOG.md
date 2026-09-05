@@ -4,7 +4,7 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.11.0] - 2026-09-05
 
 ### Added
 - **🖱 Mouse toggle** in the terminal toolbar (Workbench grid and the bottom/side `TerminalPanel`, local and SSH). It turns mouse reporting off, so a TUI such as Claude Code never receives the mouse: a plain drag selects text in xterm and `Cmd+C` copies it, exactly like an ordinary terminal. This is the escape hatch for the times a TUI's own copy fails. The flag is global (one click affects every open terminal), persisted across launches, and its button turns amber and reads "Mouse off" while active. Turning it back on re-arms whatever mouse tracking the running TUI had asked for
