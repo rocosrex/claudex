@@ -5,7 +5,8 @@ import { getTerminalSettings, buildTerminalOptions } from './terminal-themes.js'
 import { sttService } from '../../utils/stt-service.js';
 import { STTIndicator } from './STTIndicator.js';
 import { enableTerminalFileDrop } from '../../utils/terminal-file-drop.js';
-import { protectTerminalSelection, copyTerminalSelection } from '../../utils/terminal-clipboard.js';
+import { protectTerminalSelection, copyTerminalSelection, isClipboardShortcut, installOsc52Clipboard } from '../../utils/terminal-clipboard.js';
+import { toggleMouseReporting, onMouseReportingChange, renderMouseToggleButton, mouseReportingStatusText, installMouseReportingGuard } from '../../utils/terminal-mouse-mode.js';
 
 export class TerminalPanel {
   /**
@@ -31,6 +32,7 @@ export class TerminalPanel {
     this._destroyed = false;
     this._unsubscribeSttState = null;
     this._unsubscribeSttTranscribed = null;
+    this._unsubscribeMouseMode = null;
   }
 
   render() {
@@ -45,6 +47,8 @@ export class TerminalPanel {
                   title="New Terminal">+ Terminal</button>
           <button class="btn-run-claude text-xs px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
                   title="Run Claude Code">▶ Claude</button>
+          <button class="btn-mouse-toggle text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                  title="Mouse reporting">🖱 Mouse</button>
           <button class="btn-stt-toggle text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
                   title="Voice Input (PgDn×2)">🎙 Voice</button>
           <button class="btn-open-external text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
@@ -206,8 +210,9 @@ export class TerminalPanel {
     // Prevent Electron from intercepting certain keys
     term.attachCustomKeyEventHandler((e) => {
       // Delegate Cmd+C (copy), Cmd+V (paste) to browser
-      if (e.metaKey && (e.key === 'c' || e.key === 'v')) {
-        if (e.type === 'keydown' && e.key === 'c') copyTerminalSelection(term);
+      const shortcut = isClipboardShortcut(e);
+      if (shortcut) {
+        if (e.type === 'keydown' && shortcut === 'copy') copyTerminalSelection(term);
         return false;
       }
       // PgDn double-tap → STT toggle
@@ -217,6 +222,8 @@ export class TerminalPanel {
       return true;
     });
     protectTerminalSelection(term);
+    installOsc52Clipboard(term);
+    installMouseReportingGuard(term);
 
     // Immediate focus
     term.focus();
@@ -359,6 +366,15 @@ export class TerminalPanel {
       }
     });
 
+    // Mouse reporting toggle: the escape hatch when a TUI owns the mouse and
+    // copying still fails. Global flag, so every terminal surface follows it.
+    const btnMouse = this.container.querySelector('.btn-mouse-toggle');
+    renderMouseToggleButton(btnMouse);
+    btnMouse.addEventListener('click', () => {
+      Toast.show(mouseReportingStatusText(toggleMouseReporting()), 'info');
+    });
+    this._unsubscribeMouseMode = onMouseReportingChange(() => renderMouseToggleButton(btnMouse));
+
     const btnExternal = this.container.querySelector('.btn-open-external');
     if (this.isSSH) {
       btnExternal.style.display = 'none';
@@ -479,8 +495,9 @@ export class TerminalPanel {
     enableTerminalFileDrop(wrapper, () => termId);
 
     term.attachCustomKeyEventHandler((e) => {
-      if (e.metaKey && (e.key === 'c' || e.key === 'v')) {
-        if (e.type === 'keydown' && e.key === 'c') copyTerminalSelection(term);
+      const shortcut = isClipboardShortcut(e);
+      if (shortcut) {
+        if (e.type === 'keydown' && shortcut === 'copy') copyTerminalSelection(term);
         return false;
       }
       if (e.type === 'keydown' && e.key === 'PageDown') {
@@ -489,6 +506,8 @@ export class TerminalPanel {
       return true;
     });
     protectTerminalSelection(term);
+    installOsc52Clipboard(term);
+    installMouseReportingGuard(term);
 
     term.focus();
 
@@ -559,6 +578,7 @@ export class TerminalPanel {
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
     this._unsubscribeSttState?.();
     this._unsubscribeSttTranscribed?.();
+    this._unsubscribeMouseMode?.();
     this._unsubscribeSttState = null;
     this._unsubscribeSttTranscribed = null;
 

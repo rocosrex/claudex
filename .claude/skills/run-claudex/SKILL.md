@@ -83,22 +83,38 @@ Screenshots → `/tmp/claudex-shots/` (override `SCREENSHOT_DIR`).
 - Native modules (`node-pty`, `better-sqlite3`) are prebuilt for Electron's
   ABI — launch via the bundled Electron binary, never plain `node`.
 
-## Regression test: terminal selection + Cmd+C
+## Tests
 
 ```bash
-node .claude/skills/run-claudex/selection-copy-test.mjs      # exit 0 = all checks passed
+npm test                                                    # unit tests (node --test), no app launch
+node .claude/skills/run-claudex/selection-copy-test.mjs     # Option+drag selection survives + Cmd+C
+node .claude/skills/run-claudex/tui-copy-test.mjs           # TUI-owned drag: OSC 52, Cmd+C, out-of-bounds, Mouse toggle
 ```
 
-Drives a real Option+drag, a real button-less mouse move, a real `Cmd+C`, and
-reads the system clipboard back with `pbpaste`, against a stand-in TUI that
-enables any-motion mouse tracking and re-arms it every second — exactly what
-Claude Code does. Five checks; screenshots land in `/tmp/claudex-shots/`.
+`npm test` covers the pure helpers in `terminal-clipboard.js` and
+`terminal-mouse-mode.js` (mouse-report parsing, drag range, OSC 52, the `Cmd+C`
+matcher, the reporting guard) and needs no display.
 
-**Run this after touching `terminal-clipboard.js`, `terminal-themes.js`
-(`macOptionClickForcesSelection`) or any terminal key handler.** An isolated
-xterm harness is not a substitute and has already passed this bug twice: `Cmd+C`
-arrives as a bare `Meta` keydown *then* `c`, and only Playwright's real input
-reproduces that ordering, trusted events, and modifier state.
+Both `.mjs` tests drive the real app and read the system clipboard back with
+`pbpaste`; each exits 0 only when every check passes and drops screenshots in
+`/tmp/claudex-shots/`.
+
+- **`selection-copy-test.mjs`** — a real Option+drag, a button-less mouse move
+  and a real `Cmd+C` against a stand-in TUI that re-arms any-motion mouse
+  tracking every second, proving the highlight survives and the text copies.
+- **`tui-copy-test.mjs`** — the case where the TUI selects the text itself
+  (Claude Code's fullscreen mode): a plain drag then `Cmd+C`, an OSC 52 write
+  from the pty, a drag that leaves the terminal, and the **🖱 Mouse** toolbar
+  toggle turning reporting off so plain drag selects in xterm. Uses `fake-tui.py`,
+  which logs the mouse reports it receives so the out-of-bounds check can assert
+  the release landed at the last in-bounds cell rather than the clamped edge.
+
+**Run these after touching `terminal-clipboard.js`, `terminal-mouse-mode.js`,
+`terminal-themes.js` (`macOptionClickForcesSelection`) or any terminal key
+handler.** An isolated xterm harness is not a substitute and has already passed
+these bugs: `Cmd+C` arrives as a bare `Meta` keydown *then* `c`, and only
+Playwright's real input reproduces that ordering, trusted events, and modifier
+state.
 
 ## Human path
 

@@ -6,7 +6,8 @@ import { getTerminalSettings, buildTerminalOptions } from './terminal-themes.js'
 import { sttService } from '../../utils/stt-service.js';
 import { STTIndicator } from './STTIndicator.js';
 import { enableTerminalFileDrop } from '../../utils/terminal-file-drop.js';
-import { protectTerminalSelection, copyTerminalSelection } from '../../utils/terminal-clipboard.js';
+import { protectTerminalSelection, copyTerminalSelection, isClipboardShortcut, installOsc52Clipboard } from '../../utils/terminal-clipboard.js';
+import { toggleMouseReporting, onMouseReportingChange, renderMouseToggleButton, mouseReportingStatusText, installMouseReportingGuard } from '../../utils/terminal-mouse-mode.js';
 
 const MAX_TERMINALS = 8;
 
@@ -18,6 +19,7 @@ export class MultiTerminalView {
     this.resizeObserver = null;
     this._unsubscribeSttState = null;
     this._unsubscribeSttTranscribed = null;
+    this._unsubscribeMouseMode = null;
     this._onDocumentClick = null;
     this._destroyed = false;
   }
@@ -32,6 +34,8 @@ export class MultiTerminalView {
         <h2 class="text-lg font-semibold text-slate-100">⌘ Workbench</h2>
         <div class="flex items-center gap-2">
           <span class="terminal-count text-xs text-slate-500"></span>
+          <button class="btn-mouse-toggle text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                  title="Mouse reporting">🖱 Mouse</button>
           <button class="btn-stt-toggle text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
                   title="Voice Input (PgDn×2)">🎙 Voice</button>
           <div class="add-terminal-dropdown">
@@ -54,6 +58,7 @@ export class MultiTerminalView {
     this.setupResizeObserver();
     this.setupSettingsListener();
     this.setupSTT();
+    this.setupMouseToggle();
 
     return el;
   }
@@ -289,8 +294,9 @@ export class MultiTerminalView {
 
     // Custom key handler
     term.attachCustomKeyEventHandler((e) => {
-      if (e.metaKey && (e.key === 'c' || e.key === 'v')) {
-        if (e.type === 'keydown' && e.key === 'c') copyTerminalSelection(term);
+      const shortcut = isClipboardShortcut(e);
+      if (shortcut) {
+        if (e.type === 'keydown' && shortcut === 'copy') copyTerminalSelection(term);
         return false;
       }
       if (e.type === 'keydown' && e.key === 'PageDown') {
@@ -299,6 +305,8 @@ export class MultiTerminalView {
       return true;
     });
     protectTerminalSelection(term);
+    installOsc52Clipboard(term);
+    installMouseReportingGuard(term);
 
     // Store cell data
     const cellData = { type: 'terminal', termId, term, fitAddon, cellEl, title };
@@ -642,6 +650,18 @@ export class MultiTerminalView {
     store.on('terminal-settings-changed', this._onSettingsChanged);
   }
 
+  // --- Mouse reporting toggle ---
+  // The escape hatch when a TUI owns the mouse and copying still fails.
+  // Global flag, so every terminal surface follows it.
+  setupMouseToggle() {
+    const btn = this.container.querySelector('.btn-mouse-toggle');
+    renderMouseToggleButton(btn);
+    btn.addEventListener('click', () => {
+      Toast.show(mouseReportingStatusText(toggleMouseReporting()), 'info');
+    });
+    this._unsubscribeMouseMode = onMouseReportingChange(() => renderMouseToggleButton(btn));
+  }
+
   // --- STT Setup ---
   setupSTT() {
     // Add STT indicator to grid container
@@ -689,6 +709,7 @@ export class MultiTerminalView {
     if (this._onSettingsChanged) store.off('terminal-settings-changed', this._onSettingsChanged);
     this._unsubscribeSttState?.();
     this._unsubscribeSttTranscribed?.();
+    this._unsubscribeMouseMode?.();
     this._unsubscribeSttState = null;
     this._unsubscribeSttTranscribed = null;
 
