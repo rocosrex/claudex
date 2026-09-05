@@ -124,7 +124,7 @@ try {
     afterCopy.errors.length ? `errors=${JSON.stringify(afterCopy.errors)}` : '');
 
   const copied = execSync('pbpaste').toString();
-  check('system clipboard holds the selected text', copied.includes(MARKER.slice(0, 20)) && !copied.includes('SENTINEL'),
+  check('system clipboard holds the selected text', copied.includes('ALPHA-BRAVO-CHARLIE') && !copied.includes('SENTINEL'),
     JSON.stringify(copied.slice(0, 60)));
 } catch (e) {
   check('test ran to completion', false, e.message);

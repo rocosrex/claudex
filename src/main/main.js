@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, clipboard } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
@@ -517,6 +517,16 @@ ipcMain.handle('files:delete', (_, targetPath) => {
     return { success: true };
   } catch (e) {
     return { error: e.message };
+  }
+});
+
+// --- IPC: Clipboard ---
+// OSC 52 writes arrive from the pty whether or not the window is focused, and
+// navigator.clipboard rejects an unfocused document, so the renderer asks main.
+const CLIPBOARD_WRITE_LIMIT = 1_000_000;
+ipcMain.on('clipboard:writeText', (_, text) => {
+  if (typeof text === 'string' && text.length > 0 && text.length <= CLIPBOARD_WRITE_LIMIT) {
+    clipboard.writeText(text);
   }
 });
 

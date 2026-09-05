@@ -4,6 +4,18 @@ All notable changes to Claudex will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **🖱 Mouse toggle** in the terminal toolbar (Workbench grid and the bottom/side `TerminalPanel`, local and SSH). It turns mouse reporting off, so a TUI such as Claude Code never receives the mouse: a plain drag selects text in xterm and `Cmd+C` copies it, exactly like an ordinary terminal. This is the escape hatch for the times a TUI's own copy fails. The flag is global (one click affects every open terminal), persisted across launches, and its button turns amber and reads "Mouse off" while active. Turning it back on re-arms whatever mouse tracking the running TUI had asked for
+- A unit-test suite for the terminal clipboard and mouse-mode helpers — `npm test` (`node --test`), 28 cases covering the SGR mouse-report parser, the drag range reducer, buffer text extraction, OSC 52 decoding, the `Cmd+C` shortcut matcher and the mouse-reporting guard — plus a new end-to-end `tui-copy-test.mjs` that drives the real app against a stand-in fullscreen TUI and reads the system clipboard back with `pbpaste`
+
+### Fixed
+- Copying from Claude Code **over SSH** silently did nothing. Claude Code copies through an OSC 52 escape sequence when it cannot reach a local clipboard (the usual case on a remote host), and xterm ignored it. Terminals now honour OSC 52 writes from the pty and put the text on the system clipboard, routed through the main process so it works even while the renderer window is unfocused. Clipboard *queries* are never answered, so no page or remote host can read the clipboard back
+- `Cmd+C` did nothing when copying text that Claude Code's fullscreen mode had selected with a **plain drag**. Claude Code owns the mouse in that mode: it paints its own selection highlight and copies on mouse-release, so xterm never has a selection of its own and `Cmd+C` had nothing to hand over. Terminals now follow the same SGR mouse reports the TUI sees, remember the dragged cells, and copy them straight out of the buffer on `Cmd+C`
+- A plain drag whose pointer **left the terminal** copied a blank line. xterm clamps an out-of-bounds mouse position to the edge cell, so the TUI extended its selection to an empty edge row and copied that. The drag is now kept inside the terminal while the button is held, and a release outside is replayed at the last in-bounds cell, so the TUI ends its selection where the highlight actually was
+- `Cmd+C` / `Cmd+V` are now matched by physical key as well as by character, so they keep working with a non-Latin input source active. With a Korean keyboard layout `Cmd+C` arrives as key `ㅊ` (code `KeyC`) and was not recognised as copy, so `Option+drag`-then-`Cmd+C` could miss
+
 ## [1.10.10] - 2026-09-01
 
 ### Added

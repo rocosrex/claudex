@@ -211,6 +211,7 @@ claudex/
 - `terminal:data` (main→renderer), `terminal:exit` (main→renderer)
 - `terminal:openExternal`
 - `stats:dashboard`
+- `clipboard:writeText` (renderer→main; OSC 52 clipboard writes from the pty)
 
 ## 코딩 규칙
 - ES Module 스타일이지만 Electron main은 CommonJS (require)

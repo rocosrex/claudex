@@ -6,6 +6,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "NODE_ENV=development electronmon .",
+    "test": "node --test test/unit/*.test.mjs",
+    "test:e2e": "node .claude/skills/run-claudex/selection-copy-test.mjs && node .claude/skills/run-claudex/tui-copy-test.mjs",
     "rebuild": "electron-rebuild",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",

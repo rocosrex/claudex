@@ -56,6 +56,10 @@ contextBridge.exposeInMainWorld('api', {
     onExit: (callback) => ipcRenderer.on('terminal:exit', (_, termId) => callback(termId)),
     openExternal: (path, runClaude) => ipcRenderer.invoke('terminal:openExternal', path, runClaude),
   },
+  // Clipboard — written by the main process, so it works while the document is unfocused
+  clipboard: {
+    writeText: (text) => ipcRenderer.send('clipboard:writeText', text),
+  },
   // Security
   security: {
     encryptPassword: (plaintext) => ipcRenderer.invoke('security:encryptPassword', plaintext),
